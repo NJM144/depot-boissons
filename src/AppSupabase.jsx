@@ -14,6 +14,7 @@ import GerantApp from './components/gerant/GerantApp.jsx'
 import ProprietaireApp from './components/proprietaire/ProprietaireApp.jsx'
 import { adapterSupabase } from './data/adapter.js'
 import { usePush } from './hooks/usePush.js'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 
 function Routeur() {
   const { session, role, depotId, chargement, deconnexion } = useAuth()
@@ -83,7 +84,9 @@ export default function AppSupabase() {
   return (
     <AuthProvider>
       <div className="h-screen w-screen overflow-hidden">
-        <Routeur />
+        <ErrorBoundary>
+          <Routeur />
+        </ErrorBoundary>
       </div>
     </AuthProvider>
   )
