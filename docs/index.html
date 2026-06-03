@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dépôt Boissons — Télécharger l'application</title>
+  <meta name="description" content="Application mobile de gestion d'un dépôt de boissons. Téléchargez l'APK Android." />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: radial-gradient(1200px 600px at 50% -10%, #1e293b, #0f172a 60%);
+      color: #e2e8f0; min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 24px 16px 48px;
+    }
+    .carte {
+      width: 100%; max-width: 460px; background: #1e293b;
+      border: 1px solid #334155; border-radius: 24px; padding: 28px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.4); text-align: center;
+    }
+    .emoji { font-size: 64px; line-height: 1; }
+    h1 { font-size: 28px; font-weight: 900; margin: 8px 0 4px; }
+    .sous { color: #94a3b8; font-size: 15px; margin-bottom: 22px; }
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 18px; border-radius: 16px; text-decoration: none;
+      background: linear-gradient(180deg, #22c55e, #16a34a); color: #fff;
+      font-size: 20px; font-weight: 800; border: none; cursor: pointer;
+      box-shadow: 0 8px 24px rgba(22,163,74,.45); transition: transform .1s;
+    }
+    .btn:active { transform: scale(.97); }
+    .taille { color: #64748b; font-size: 13px; margin-top: 10px; }
+    .qr-bloc {
+      margin: 26px 0 6px; padding: 18px; background: #fff;
+      border-radius: 18px; display: inline-block;
+    }
+    .qr-bloc img { width: 220px; height: 220px; display: block; }
+    .qr-txt { color: #94a3b8; font-size: 14px; margin-top: 8px; }
+    .sep { height: 1px; background: #334155; margin: 26px 0; }
+    .titre-sec { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 12px; }
+    .comptes { display: grid; gap: 10px; }
+    .compte {
+      display: flex; align-items: center; gap: 12px; background: #0f172a;
+      border: 1px solid #334155; border-radius: 14px; padding: 12px 14px; text-align: left;
+    }
+    .compte .ico { font-size: 28px; }
+    .compte .info { flex: 1; min-width: 0; }
+    .compte .role { font-weight: 700; font-size: 14px; }
+    .compte .id { color: #94a3b8; font-size: 13px; font-family: ui-monospace, monospace; }
+    .feats { text-align: left; display: grid; gap: 8px; color: #cbd5e1; font-size: 14px; }
+    .feats div::before { content: "✓ "; color: #22c55e; font-weight: 900; }
+    .alerte {
+      background: #422006; border: 1px solid #92400e; color: #fbbf24;
+      border-radius: 12px; padding: 12px; font-size: 13px; margin-top: 18px; text-align: left;
+    }
+    .pied { color: #64748b; font-size: 12px; margin-top: 22px; text-align: center; }
+    .pied a { color: #818cf8; }
+  </style>
+</head>
+<body>
+  <div class="carte">
+    <div class="emoji">🍹</div>
+    <h1>Dépôt Boissons</h1>
+    <p class="sous">Gestion d'un dépôt de boissons — Android</p>
+
+    <!-- Bouton de téléchargement -->
+    <a class="btn" id="dl"
+       href="https://github.com/NJM144/depot-boissons/releases/download/v1.0.0/depot-boissons-v1.0.0.apk">
+      ⬇️ Télécharger l'application
+    </a>
+    <p class="taille">APK Android · ~6,5 Mo · v1.0.0</p>
+
+    <!-- QR code -->
+    <div class="qr-bloc">
+      <img src="qr.png" alt="QR code de téléchargement" />
+    </div>
+    <p class="qr-txt">📷 Scanne ce QR code avec un autre téléphone</p>
+
+    <div class="sep"></div>
+
+    <!-- Comptes de démonstration -->
+    <p class="titre-sec">Comptes de démonstration</p>
+    <div class="comptes">
+      <div class="compte">
+        <span class="ico">👔</span>
+        <div class="info">
+          <div class="role">Propriétaire</div>
+          <div class="id">patron@depot.ci · patron1234</div>
+        </div>
+      </div>
+      <div class="compte">
+        <span class="ico">🧑‍🏭</span>
+        <div class="info">
+          <div class="role">Gérant</div>
+          <div class="id">gerant@depot.ci · gerant1234</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sep"></div>
+
+    <!-- Fonctionnalités -->
+    <p class="titre-sec">Ce que fait l'application</p>
+    <div class="feats">
+      <div>Profil gérant 100% visuel (images, voix, billets/pièces FCFA)</div>
+      <div>Saisie entrées / sorties / boissons cassées</div>
+      <div>Profil propriétaire : ventes, marges, stock, temps réel</div>
+      <div>Le point : jour / semaine / mois</div>
+    </div>
+
+    <div class="alerte">
+      ⚠️ À l'installation, Android demande d'autoriser les « sources inconnues ».
+      Accepte pour le navigateur ou le gestionnaire de fichiers utilisé.
+    </div>
+
+    <p class="pied">
+      Code source : <a href="https://github.com/NJM144/depot-boissons">github.com/NJM144/depot-boissons</a>
+    </p>
+  </div>
+</body>
+</html>
