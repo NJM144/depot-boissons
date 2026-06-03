@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Réinitialisations globales pour une application mobile plein écran */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overscroll-behavior: none; /* évite le rebond/pull-to-refresh sur Android */
+  -webkit-tap-highlight-color: transparent;
+  user-select: none; /* l'app n'est pas un document à sélectionner */
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+  background: #0f172a;
+  /* Respect des zones sûres (encoche, barre de navigation gestuelle) */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Classe utilitaire : gros bouton tactile par défaut (profil gérant) */
+.btn-tactile {
+  @apply min-h-bouton min-w-bouton rounded-2xl shadow-lg active:scale-95 transition-transform flex flex-col items-center justify-center font-bold;
+}
+
+/* Masquer la barre de scroll tout en gardant le défilement */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

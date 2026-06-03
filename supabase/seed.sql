@@ -1,0 +1,29 @@
+-- ============================================================================
+--  DÉPÔT BOISSONS — SEED : COMPTES DÉMO + CATALOGUE
+-- ----------------------------------------------------------------------------
+--  À exécuter APRÈS les migrations 0001 → 0005.
+--  ⚠️ Les comptes auth ne se créent PAS en SQL pur : utilisez l'écran d'admin
+--     de l'app, le tableau de bord Supabase (Authentication → Add user), ou
+--     l'API admin (voir scripts/creer-comptes.mjs). Le trigger handle_new_user
+--     crée automatiquement le profil à partir des métadonnées.
+--
+--  Étapes recommandées :
+--   1) Créer le compte PROPRIÉTAIRE (Authentication) avec user_metadata :
+--        { "role": "proprietaire", "nom": "Patron" }
+--   2) Récupérer son UUID, puis créer le dépôt ci-dessous avec proprietaire_id.
+--   3) Créer le compte GÉRANT avec user_metadata :
+--        { "role": "gerant", "nom": "Gérant", "depot_id": "<UUID_DU_DEPOT>" }
+-- ============================================================================
+
+-- Exemple : créer un dépôt pour un propriétaire existant (remplacer l'UUID)
+-- insert into public.depots (id, nom, proprietaire_id)
+-- values ('00000000-0000-0000-0000-0000000000d1', 'Dépôt Central', '<UUID_PROPRIETAIRE>');
+
+-- Catalogue de démonstration (remplacer le depot_id par celui créé ci-dessus)
+-- insert into public.boissons (depot_id, nom, emoji, couleur_casier, prix_achat, prix_vente, seuil_alerte) values
+--   ('<DEPOT_ID>', 'Coca-Cola',     '🥤', '#dc2626', 350, 500, 10),
+--   ('<DEPOT_ID>', 'Fanta Orange',  '🍊', '#ea580c', 350, 500, 10),
+--   ('<DEPOT_ID>', 'Sprite',        '🥤', '#16a34a', 350, 500, 10),
+--   ('<DEPOT_ID>', 'Eau minérale',  '💧', '#0ea5e9', 150, 300, 15),
+--   ('<DEPOT_ID>', 'Bière',         '🍺', '#ca8a04', 650, 1000, 12),
+--   ('<DEPOT_ID>', 'Jus de fruit',  '🧃', '#9333ea', 450, 700, 8);
