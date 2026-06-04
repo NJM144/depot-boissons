@@ -1,4 +1,4 @@
--- DEPOT BOISSONS - SCHEMA COMPLET (migrations 0001 -> 0007)
+-- DEPOT BOISSONS - SCHEMA COMPLET (0001 -> 0007)
 
 -- >>> 0001_tables.sql <<<
 -- ============================================================================
@@ -811,6 +811,7 @@ $$;
 --  - Le STOCK est compté en BOUTEILLES (unité de base). Conversion :
 --      1 casier = `bouteilles_par_casier` bouteilles (réglable par boisson).
 --  - prix_achat / prix_vente sont désormais PAR BOUTEILLE.
+--  Idempotent : peut être relancé sans risque.
 -- ============================================================================
 
 -- 1) Nombre de bouteilles par casier (par boisson) ----------------------------
@@ -837,15 +838,12 @@ begin
     into v_prix_achat, v_prix_vente, v_bpc
   from public.boissons where id = new.boisson_id;
 
-  -- Quantité convertie en bouteilles (1 casier = v_bpc bouteilles)
   v_qte_bt := new.quantite * (case when new.unite = 'casier' then coalesce(v_bpc, 1) else 1 end);
   new.quantite_bouteilles := v_qte_bt;
 
   if new.type = 'sortie' then
-    -- Montant EXACT composé (sinon prix_vente/bouteille x nb bouteilles)
     new.montant_total := coalesce(new.montant_total, v_qte_bt * v_prix_vente);
-    new.prix_unitaire := round(new.montant_total / nullif(v_qte_bt, 0), 2); -- prix effectif / bouteille
-    -- Marge = montant réel - coût d'achat total (en bouteilles)
+    new.prix_unitaire := round(new.montant_total / nullif(v_qte_bt, 0), 2);
     new.marge := new.montant_total - coalesce(v_prix_achat, 0) * v_qte_bt;
   else
     new.prix_unitaire := coalesce(new.prix_unitaire, v_prix_achat);
@@ -862,8 +860,15 @@ create trigger trg_calc_mouvement
   before insert or update on public.mouvements
   for each row execute function public.calc_mouvement();
 
--- 4) v_stock : stock en BOUTEILLES (entrées/sorties converties ; casse = bouteilles)
-create or replace view public.v_stock
+-- 4) VUES : on les SUPPRIME puis RECRÉE (changement de colonnes interdit en
+--    "create or replace"). On respecte l'ordre des dépendances et on REDONNE
+--    les droits ensuite.
+drop view if exists public.v_stock_gerant;
+drop view if exists public.v_boissons_gerant;
+drop view if exists public.v_stock;
+
+-- v_stock : stock en BOUTEILLES (entrées/sorties converties ; casse = bouteilles)
+create view public.v_stock
 with (security_invoker = true) as
 select
   b.id            as boisson_id,
@@ -893,15 +898,27 @@ left join (
 ) c on c.boisson_id = b.id
 where b.actif = true;
 
--- 5) Vue catalogue gérant : inclut bouteilles_par_casier (prix de vente / bouteille)
-create or replace view public.v_boissons_gerant
+-- v_stock_gerant : stock du dépôt du gérant courant
+create view public.v_stock_gerant
+with (security_invoker = false) as
+select boisson_id, depot_id, nom, emoji, couleur_casier, seuil_alerte, stock, en_rupture
+from public.v_stock
+where depot_id = public.user_depot_id();
+
+-- v_boissons_gerant : catalogue gérant (sans prix_achat), avec bouteilles_par_casier
+create view public.v_boissons_gerant
 with (security_invoker = false) as
 select id, depot_id, nom, emoji, photo, couleur_casier,
        prix_vente, bouteilles_par_casier, seuil_alerte, actif
 from public.boissons
 where actif = true and depot_id = public.user_depot_id();
 
--- 6) get_point : quantité vendue exprimée en BOUTEILLES --------------------------
+-- On REDONNE les droits perdus à la suppression des vues
+grant select on public.v_stock          to authenticated;
+grant select on public.v_stock_gerant   to authenticated;
+grant select on public.v_boissons_gerant to authenticated;
+
+-- 5) get_point : quantité vendue exprimée en BOUTEILLES -----------------------
 create or replace function public.get_point(p_depot_id uuid, p_periode text)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare
