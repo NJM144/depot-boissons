@@ -29,9 +29,11 @@ export default function VentesLive({ depotId }) {
       initial.current = true
       const debutJour = new Date()
       debutJour.setHours(0, 0, 0, 0)
-      Cloud.listerMouvements(depotId, { type: 'sortie', dateDebut: debutJour.toISOString() }).then(
-        (lignes) => setVentes(lignes.slice(0, 50))
-      )
+      Cloud.listerMouvements(depotId, {
+        type: 'sortie',
+        statut: 'valide', // on n'affiche que les ventes VALIDÉES
+        dateDebut: debutJour.toISOString(),
+      }).then((lignes) => setVentes(lignes.slice(0, 50)))
     }
 
     const off = Cloud.abonnerVentes(depotId, (vente) => {

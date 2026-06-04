@@ -8,7 +8,7 @@
 //   - Réglages (changer le code PIN)
 // ============================================================================
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AuthPIN from './AuthPIN.jsx'
 import TableauBord from './TableauBord.jsx'
 import Historique from './Historique.jsx'
@@ -16,12 +16,24 @@ import GestionCatalogue from './GestionCatalogue.jsx'
 import PointPeriodique from './PointPeriodique.jsx'
 import VentesLive from './VentesLive.jsx'
 import CatalogueSupabase from './CatalogueSupabase.jsx'
+import AValider from './AValider.jsx'
+import * as Cloud from '../../supabase/api.js'
 import * as DB from '../../db/database.js'
 
 export default function ProprietaireApp({ onQuitter, modeSupabase = false, depotId = null, userId = null }) {
   // En MODE LOCAL : protection par PIN. En MODE SUPABASE : déjà authentifié.
   const [authentifie, setAuthentifie] = useState(modeSupabase)
-  const [onglet, setOnglet] = useState(modeSupabase ? 'point' : 'tableau')
+  const [onglet, setOnglet] = useState(modeSupabase ? 'valider' : 'tableau')
+  const [nbAttente, setNbAttente] = useState(0)
+
+  // En mode Supabase : compte les saisies en attente + écoute le temps réel
+  useEffect(() => {
+    if (!modeSupabase || !depotId) return
+    const maj = () => Cloud.compterEnAttente(depotId).then(setNbAttente).catch(() => {})
+    maj()
+    const off = Cloud.abonnerChangements(depotId, maj)
+    return off
+  }, [modeSupabase, depotId])
 
   if (!authentifie) {
     return <AuthPIN onSucces={() => setAuthentifie(true)} onAnnuler={onQuitter} />
@@ -30,6 +42,7 @@ export default function ProprietaireApp({ onQuitter, modeSupabase = false, depot
   // Onglets différents selon le mode
   const onglets = modeSupabase
     ? [
+        { cle: 'valider', icone: '📝', label: 'À valider', badge: nbAttente },
         { cle: 'point', icone: '🎯', label: 'Point' },
         { cle: 'live', icone: '🔴', label: 'En direct' },
         { cle: 'catalogue', icone: '📚', label: 'Catalogue' },
@@ -61,6 +74,9 @@ export default function ProprietaireApp({ onQuitter, modeSupabase = false, depot
         {!modeSupabase && onglet === 'historique' && <Historique />}
         {!modeSupabase && onglet === 'catalogue' && <GestionCatalogue />}
         {/* Mode Supabase (cloud) */}
+        {modeSupabase && onglet === 'valider' && (
+          <AValider depotId={depotId} onMajCompteur={setNbAttente} />
+        )}
         {modeSupabase && onglet === 'point' && <PointPeriodique depotId={depotId} />}
         {modeSupabase && onglet === 'live' && <VentesLive depotId={depotId} />}
         {modeSupabase && onglet === 'catalogue' && <CatalogueSupabase depotId={depotId} />}
@@ -74,12 +90,18 @@ export default function ProprietaireApp({ onQuitter, modeSupabase = false, depot
           <button
             key={o.cle}
             onClick={() => setOnglet(o.cle)}
-            className={`flex-1 py-2 flex flex-col items-center text-xs font-semibold ${
+            className={`relative flex-1 py-2 flex flex-col items-center text-xs font-semibold ${
               onglet === o.cle ? 'text-indigo-700' : 'text-slate-400'
             }`}
           >
             <span className="text-2xl">{o.icone}</span>
             {o.label}
+            {/* Pastille du nombre en attente */}
+            {o.badge > 0 && (
+              <span className="absolute top-0 right-3 bg-red-600 text-white text-[10px] font-black rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+                {o.badge > 99 ? '99+' : o.badge}
+              </span>
+            )}
           </button>
         ))}
       </nav>

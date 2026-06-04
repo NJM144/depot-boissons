@@ -93,17 +93,17 @@ function normaliserBoisson(r) {
 // ----------------------------------------------------------------------------
 
 // Enregistre une entrée (reçu) ou une sortie (vente).
-//  - montant : total composé au clavier monétaire (utilisé pour les sorties)
+//  - montant : total EXACT composé au clavier monétaire (pour les sorties)
+//  La ligne est créée avec statut 'en_attente' (défaut SQL) : le patron validera.
 export async function ajouterMouvement({ depotId, boissonId, type, quantite, montant, gerantId }) {
-  // Le trigger SQL recalcule montant_total et marge. Pour une sortie, on fournit
-  // le prix unitaire = total / quantité (le gérant compose un montant global).
-  const prixUnitaire = type === 'sortie' && quantite > 0 ? Number((montant / quantite).toFixed(2)) : null
+  // On envoie le montant EXACT (pas d'arrondi) ; le trigger calcule la marge.
+  const montantTotal = type === 'sortie' ? Number(montant) || 0 : null
   const { error } = await supabase.from('mouvements').insert({
     depot_id: depotId,
     boisson_id: boissonId,
     type,
     quantite,
-    prix_unitaire: prixUnitaire,
+    montant_total: montantTotal,
     gerant_id: gerantId || null,
   })
   if (error) throw error
@@ -119,6 +119,7 @@ export async function listerMouvements(depotId, filtres = {}) {
 
   if (filtres.boissonId) q = q.eq('boisson_id', filtres.boissonId)
   if (filtres.type) q = q.eq('type', filtres.type)
+  if (filtres.statut) q = q.eq('statut', filtres.statut)
   if (filtres.dateDebut) q = q.gte('created_at', filtres.dateDebut)
   if (filtres.dateFin) q = q.lte('created_at', filtres.dateFin)
 
@@ -138,6 +139,94 @@ export async function ajouterCasse({ depotId, boissonId, quantite, gerantId }) {
     gerant_id: gerantId || null,
   })
   if (error) throw error
+}
+
+// ----------------------------------------------------------------------------
+//  VALIDATION PAR LE PATRON (mouvements + casses en attente)
+// ----------------------------------------------------------------------------
+
+// Liste TOUT ce qui est en attente de validation (ventes, réceptions, casses),
+// enrichi du nom de la boisson, trié du plus récent au plus ancien.
+export async function listerEnAttente(depotId) {
+  const [mvts, casses, boissons] = await Promise.all([
+    supabase.from('mouvements').select('*').eq('depot_id', depotId).eq('statut', 'en_attente'),
+    supabase.from('casses').select('*').eq('depot_id', depotId).eq('statut', 'en_attente'),
+    supabase.from('boissons').select('id, nom, emoji'),
+  ])
+  if (mvts.error) throw mvts.error
+  if (casses.error) throw casses.error
+  const parId = new Map((boissons.data || []).map((b) => [b.id, b]))
+
+  const lignes = [
+    ...(mvts.data || []).map((m) => ({
+      kind: 'mouvement',
+      id: m.id,
+      type: m.type, // 'entree' | 'sortie'
+      quantite: m.quantite,
+      montant: m.montant_total,
+      created_at: m.created_at,
+      boisson: parId.get(m.boisson_id),
+    })),
+    ...(casses.data || []).map((c) => ({
+      kind: 'casse',
+      id: c.id,
+      type: 'casse',
+      quantite: c.quantite,
+      montant: c.cout_total,
+      created_at: c.created_at,
+      boisson: parId.get(c.boisson_id),
+    })),
+  ]
+  return lignes.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+}
+
+// Nombre d'éléments en attente (pour le badge de l'onglet)
+export async function compterEnAttente(depotId) {
+  const [m, c] = await Promise.all([
+    supabase.from('mouvements').select('id', { count: 'exact', head: true })
+      .eq('depot_id', depotId).eq('statut', 'en_attente'),
+    supabase.from('casses').select('id', { count: 'exact', head: true })
+      .eq('depot_id', depotId).eq('statut', 'en_attente'),
+  ])
+  return (m.count || 0) + (c.count || 0)
+}
+
+// Valide un mouvement (avec correction éventuelle du montant / de la quantité)
+export async function validerMouvement(id, { montant, quantite } = {}) {
+  const maj = { statut: 'valide' }
+  if (quantite != null) maj.quantite = Number(quantite)
+  if (montant != null) maj.montant_total = Number(montant) // le trigger recalcule la marge
+  const { error } = await supabase.from('mouvements').update(maj).eq('id', id)
+  if (error) throw error
+}
+
+export async function rejeterMouvement(id) {
+  const { error } = await supabase.from('mouvements').update({ statut: 'rejete' }).eq('id', id)
+  if (error) throw error
+}
+
+// Valide / rejette une casse (correction éventuelle de la quantité)
+export async function validerCasse(id, { quantite } = {}) {
+  const maj = { statut: 'valide' }
+  if (quantite != null) maj.quantite = Number(quantite) // le trigger recalcule le coût
+  const { error } = await supabase.from('casses').update(maj).eq('id', id)
+  if (error) throw error
+}
+
+export async function rejeterCasse(id) {
+  const { error } = await supabase.from('casses').update({ statut: 'rejete' }).eq('id', id)
+  if (error) throw error
+}
+
+// Abonnement temps réel à TOUT changement (mouvements + casses) du dépôt :
+// utilisé par la file de validation pour se rafraîchir en direct.
+export function abonnerChangements(depotId, onChange) {
+  const canal = supabase
+    .channel(`changements-${depotId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'mouvements', filter: `depot_id=eq.${depotId}` }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'casses', filter: `depot_id=eq.${depotId}` }, onChange)
+    .subscribe()
+  return () => supabase.removeChannel(canal)
 }
 
 // ----------------------------------------------------------------------------
@@ -185,25 +274,19 @@ export async function pointHistorique(depotId, periode) {
 }
 
 // ----------------------------------------------------------------------------
-//  TEMPS RÉEL — abonnement aux ventes (INSERT sortie) d'un dépôt
-//   onVente(mouvement) est appelé à chaque nouvelle vente.
-//   Retourne une fonction de désabonnement.
+//  TEMPS RÉEL — abonnement aux ventes VALIDÉES d'un dépôt
+//   onVente(mouvement) est appelé quand une vente devient 'valide' (le patron
+//   l'a validée) — à l'INSERT comme à l'UPDATE. Retourne le désabonnement.
 // ----------------------------------------------------------------------------
 export function abonnerVentes(depotId, onVente) {
+  const traiter = (payload) => {
+    const m = payload.new
+    if (m?.type === 'sortie' && m?.statut === 'valide') onVente(m)
+  }
   const canal = supabase
     .channel(`ventes-${depotId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'mouvements',
-        filter: `depot_id=eq.${depotId}`,
-      },
-      (payload) => {
-        if (payload.new?.type === 'sortie') onVente(payload.new)
-      }
-    )
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mouvements', filter: `depot_id=eq.${depotId}` }, traiter)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mouvements', filter: `depot_id=eq.${depotId}` }, traiter)
     .subscribe()
   return () => supabase.removeChannel(canal)
 }
