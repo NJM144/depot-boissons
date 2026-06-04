@@ -45,6 +45,7 @@ export async function ajouterBoisson(depotId, b) {
     couleur_casier: b.couleurCasier || '#3b82f6',
     prix_achat: Number(b.prixAchat) || 0,
     prix_vente: Number(b.prixVente) || 0,
+    bouteilles_par_casier: Number(b.bouteillesParCasier) || 12,
     seuil_alerte: Number(b.seuilAlerte) || 5,
   })
   if (error) throw error
@@ -60,6 +61,7 @@ export async function modifierBoisson(id, champs) {
       couleur_casier: champs.couleurCasier,
       prix_achat: Number(champs.prixAchat) || 0,
       prix_vente: Number(champs.prixVente) || 0,
+      bouteilles_par_casier: Number(champs.bouteillesParCasier) || 12,
       seuil_alerte: Number(champs.seuilAlerte) || 0,
     })
     .eq('id', id)
@@ -82,7 +84,8 @@ function normaliserBoisson(r) {
     couleurCasier: r.couleur_casier,
     prixAchat: r.prix_achat,       // undefined côté gérant (colonne masquée)
     prixVente: r.prix_vente,
-    prixReference: r.prix_vente,   // alias utilisé par le clavier monétaire
+    prixReference: r.prix_vente,   // prix / bouteille — utilisé par le clavier monétaire
+    bouteillesParCasier: r.bouteilles_par_casier || 12,
     seuilAlerte: r.seuil_alerte,
     actif: r.actif,
   }
@@ -94,8 +97,9 @@ function normaliserBoisson(r) {
 
 // Enregistre une entrée (reçu) ou une sortie (vente).
 //  - montant : total EXACT composé au clavier monétaire (pour les sorties)
+//  - unite   : 'bouteille' | 'casier' (le trigger convertit en bouteilles)
 //  La ligne est créée avec statut 'en_attente' (défaut SQL) : le patron validera.
-export async function ajouterMouvement({ depotId, boissonId, type, quantite, montant, gerantId }) {
+export async function ajouterMouvement({ depotId, boissonId, type, quantite, montant, unite, gerantId }) {
   // On envoie le montant EXACT (pas d'arrondi) ; le trigger calcule la marge.
   const montantTotal = type === 'sortie' ? Number(montant) || 0 : null
   const { error } = await supabase.from('mouvements').insert({
@@ -103,6 +107,7 @@ export async function ajouterMouvement({ depotId, boissonId, type, quantite, mon
     boisson_id: boissonId,
     type,
     quantite,
+    unite: unite || 'bouteille',
     montant_total: montantTotal,
     gerant_id: gerantId || null,
   })
@@ -163,6 +168,8 @@ export async function listerEnAttente(depotId) {
       id: m.id,
       type: m.type, // 'entree' | 'sortie'
       quantite: m.quantite,
+      unite: m.unite, // 'bouteille' | 'casier'
+      quantiteBouteilles: m.quantite_bouteilles,
       montant: m.montant_total,
       created_at: m.created_at,
       boisson: parId.get(m.boisson_id),

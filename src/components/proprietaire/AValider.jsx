@@ -105,13 +105,26 @@ export default function AValider({ depotId, onMajCompteur }) {
           const a = ASPECT[l.type] || ASPECT.sortie
           return (
             <div key={l.id} className={`bg-white rounded-xl p-3 mb-2 shadow-sm border-l-8 ${a.couleur}`}>
-              {/* En-tête : type + boisson + heure */}
+              {/* En-tête : type + boisson + unité + heure */}
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-2xl">{a.ico}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-sm">{a.libelle}</p>
+                  <p className="font-bold text-sm">
+                    {a.libelle}
+                    {l.kind === 'mouvement' && (
+                      <span className="ml-2 text-xs bg-slate-200 rounded px-1.5 py-0.5">
+                        {l.unite === 'casier' ? '📦 casier' : '🍾 bouteille'}
+                      </span>
+                    )}
+                    {l.kind === 'casse' && (
+                      <span className="ml-2 text-xs bg-slate-200 rounded px-1.5 py-0.5">🍾 bouteille</span>
+                    )}
+                  </p>
                   <p className="text-sm text-slate-600 truncate">
                     {l.boisson?.emoji} {l.boisson?.nom || '(boisson)'}
+                    {l.unite === 'casier' && l.quantiteBouteilles
+                      ? ` — ${l.quantiteBouteilles} 🍾 au total`
+                      : ''}
                   </p>
                 </div>
                 <span className="text-xs text-slate-400">
@@ -122,7 +135,7 @@ export default function AValider({ depotId, onMajCompteur }) {
               {/* Champs corrigeables : quantité (+ montant pour les ventes) */}
               <div className="flex items-end gap-2 mb-2">
                 <label className="flex flex-col text-xs text-slate-500">
-                  Quantité
+                  {l.unite === 'casier' ? 'Casiers' : 'Quantité'}
                   <input
                     type="number"
                     value={l.quantite}

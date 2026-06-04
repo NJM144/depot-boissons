@@ -38,14 +38,18 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
   const [casseMode, setCasseMode] = useState(false)
   const [boisson, setBoisson] = useState(null)
   const [type, setType] = useState(null) // 'entree' | 'sortie'
+  const [unite, setUnite] = useState('bouteille') // 'bouteille' | 'casier'
   const [quantite, setQuantite] = useState(1)
   const [montant, setMontant] = useState(0)
   const [histoCoupures, setHistoCoupures] = useState([]) // pour annuler-dernier
+
+  const bpc = boisson?.bouteillesParCasier || 12
 
   // Réinitialise tout le parcours
   const recommencer = () => {
     setBoisson(null)
     setType(null)
+    setUnite('bouteille')
     setQuantite(1)
     setMontant(0)
     setHistoCoupures([])
@@ -58,21 +62,31 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
     setEtape('sens')
   }
 
+  // Étape 2 : sens (reçu / vendu) → puis choix de l'unité
   const choisirSens = (sens) => {
     clic()
     parler(sens === 'entree' ? 'Reçu' : 'Vendu')
     setType(sens)
+    setEtape('unite')
+  }
+
+  // Étape 3 : unité (bouteille / casier) → puis quantité
+  const choisirUnite = (u) => {
+    clic()
+    parler(u === 'casier' ? 'Casier' : 'Bouteille')
+    setUnite(u)
     setEtape('quantite')
   }
 
   // Enregistre le mouvement via l'adaptateur puis confirme
   const enregistrer = async () => {
-    await adapter.ajouterMouvement({ boissonId: boisson.id, type, quantite, montant })
+    await adapter.ajouterMouvement({ boissonId: boisson.id, type, quantite, montant, unite })
     setTimeout(recommencer, 400)
   }
 
-  // Prix suggéré = prix de référence × quantité (aide au clavier monétaire)
-  const prixSuggere = (boisson?.prixReference || 0) * quantite
+  // Prix suggéré = prix/bouteille × (nb de bouteilles) — tient compte de l'unité
+  const nbBouteilles = unite === 'casier' ? quantite * bpc : quantite
+  const prixSuggere = (boisson?.prixReference || 0) * nbBouteilles
 
   // Retour visuel
   const retour = () => {
@@ -80,9 +94,10 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
     if (casseMode) return recommencer()
     if (etape === 'selection') return onQuitter()
     if (etape === 'sens') return recommencer()
-    if (etape === 'quantite') return setEtape('sens')
+    if (etape === 'unite') return setEtape('sens')
+    if (etape === 'quantite') return setEtape('unite')
     if (etape === 'montant') return setEtape('quantite')
-    if (etape === 'recap') return setEtape('montant')
+    if (etape === 'recap') return setEtape(type === 'sortie' ? 'montant' : 'quantite')
   }
 
   // ----- Sous-flux CASSÉ -----------------------------------------------------
@@ -166,6 +181,27 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
           </div>
         )}
 
+        {/* Choix de l'unité : BOUTEILLE ou CASIER */}
+        {etape === 'unite' && (
+          <div className="h-full grid grid-rows-2 gap-4 p-4">
+            <button
+              onClick={() => choisirUnite('bouteille')}
+              className="btn-tactile bg-sky-700 active:brightness-90 text-white gap-2"
+            >
+              <span className="text-8xl">🍾</span>
+              <span className="text-4xl font-black">BOUTEILLE</span>
+            </button>
+            <button
+              onClick={() => choisirUnite('casier')}
+              className="btn-tactile bg-orange-700 active:brightness-90 text-white gap-2"
+            >
+              <span className="text-8xl">📦</span>
+              <span className="text-4xl font-black">CASIER</span>
+              <span className="text-xl opacity-90">= {bpc} 🍾</span>
+            </button>
+          </div>
+        )}
+
         {etape === 'quantite' && (
           <div className="h-full flex flex-col">
             <div className="flex-1 min-h-0">
@@ -173,18 +209,21 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
                 boisson={boisson}
                 type={type}
                 quantite={quantite}
+                unite={unite}
+                bouteillesParCasier={bpc}
                 onChange={setQuantite}
               />
             </div>
             <div className="p-3">
+              {/* Vente → étape montant ; Réception → directement le récap (pas d'argent) */}
               <button
                 onClick={() => {
                   clic()
-                  setEtape('montant')
+                  setEtape(type === 'sortie' ? 'montant' : 'recap')
                 }}
                 className="btn-tactile bg-sky-600 active:bg-sky-700 text-white w-full h-20 text-4xl flex-row gap-3"
               >
-                ➡️ 💰
+                {type === 'sortie' ? '➡️ 💰' : '➡️ ✓'}
               </button>
             </div>
           </div>
@@ -222,6 +261,8 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
             boisson={boisson}
             type={type}
             quantite={quantite}
+            unite={unite}
+            bouteillesParCasier={bpc}
             montant={montant}
             onValider={enregistrer}
             onAnnuler={recommencer}

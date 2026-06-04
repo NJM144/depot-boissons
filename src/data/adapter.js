@@ -13,6 +13,7 @@ import * as Cloud from '../supabase/api.js'
 export const adapterLocal = {
   mode: 'local',
   listerBoissons: () => Local.listerBoissons(),
+  // En local on ne gère pas l'unité (mode démo) : on stocke la quantité telle quelle
   ajouterMouvement: ({ boissonId, type, quantite, montant }) =>
     Local.ajouterMouvement({ boissonId, type, quantite, montant }),
   ajouterCasse: ({ boissonId, quantite }) => Local.ajouterCasse({ boissonId, quantite }),
@@ -25,8 +26,8 @@ export function adapterSupabase({ depotId, gerantId }) {
   return {
     mode: 'supabase',
     listerBoissons: () => Cloud.listerBoissonsGerant(),
-    ajouterMouvement: ({ boissonId, type, quantite, montant }) =>
-      Cloud.ajouterMouvement({ depotId, boissonId, type, quantite, montant, gerantId }),
+    ajouterMouvement: ({ boissonId, type, quantite, montant, unite }) =>
+      Cloud.ajouterMouvement({ depotId, boissonId, type, quantite, montant, unite, gerantId }),
     ajouterCasse: ({ boissonId, quantite }) =>
       Cloud.ajouterCasse({ depotId, boissonId, quantite, gerantId }),
     calculerStocks: () => Cloud.calculerStocks(depotId),

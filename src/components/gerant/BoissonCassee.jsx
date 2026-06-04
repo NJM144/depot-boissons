@@ -33,9 +33,10 @@ export default function BoissonCassee({ boissons, adapter, onTermine }) {
   }
 
   const valider = async () => {
+    // La casse est toujours comptée en BOUTEILLES
     await adapter.ajouterCasse({ boissonId: boisson.id, quantite })
     succes()
-    parler(`Cassé, ${boisson.nom}, ${quantite}`)
+    parler(`Cassé, ${boisson.nom}, ${quantite} ${quantite > 1 ? 'bouteilles' : 'bouteille'}`)
     setTimeout(onTermine, 400)
   }
 
@@ -89,7 +90,13 @@ export default function BoissonCassee({ boissons, adapter, onTermine }) {
           <div className="h-full flex flex-col p-3 gap-3">
             <div className="flex-1 flex flex-col items-center justify-center gap-4">
               <PhotoBoisson boisson={boisson} taille={120} />
-              <span className="text-white text-7xl font-black">×{quantite}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-white text-7xl font-black">×{quantite}</span>
+                <span className="text-5xl">🍾</span>
+              </div>
+              <span className="text-amber-200 text-lg font-bold">
+                {quantite} {quantite > 1 ? 'bouteilles' : 'bouteille'} cassée{quantite > 1 ? 's' : ''}
+              </span>
               {/* Coût DISCRET (petit, grisé) */}
               <span className="text-amber-300/70 text-sm">≈ {formaterFCFA(coutIndicatif)}</span>
             </div>

@@ -36,7 +36,7 @@ function redimensionner(file, maxDim = 400) {
   })
 }
 
-const VIDE = { nom: '', emoji: '🥤', photo: null, couleurCasier: '#3b82f6', prixAchat: 0, prixVente: 500, seuilAlerte: 5 }
+const VIDE = { nom: '', emoji: '🥤', photo: null, couleurCasier: '#3b82f6', prixAchat: 0, prixVente: 500, bouteillesParCasier: 12, seuilAlerte: 5 }
 
 export default function CatalogueSupabase({ depotId }) {
   const [boissons, setBoissons] = useState([])
@@ -135,17 +135,24 @@ export default function CatalogueSupabase({ depotId }) {
               ))}
             </div>
 
-            <div className="grid grid-cols-3 gap-2 mb-4">
+            <p className="text-xs text-slate-500 mb-1">💡 Les prix sont <b>par bouteille</b>.</p>
+            <div className="grid grid-cols-2 gap-2 mb-2">
               <div>
-                <label className="block text-xs font-semibold mb-1">Prix achat</label>
+                <label className="block text-xs font-semibold mb-1">Achat / bouteille (FCFA)</label>
                 <input type="number" value={edition.prixAchat} onChange={(e) => setEdition({ ...edition, prixAchat: e.target.value })} className="border rounded-lg p-2 w-full" />
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1">Prix vente</label>
+                <label className="block text-xs font-semibold mb-1">Vente / bouteille (FCFA)</label>
                 <input type="number" value={edition.prixVente} onChange={(e) => setEdition({ ...edition, prixVente: e.target.value })} className="border rounded-lg p-2 w-full" />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-4">
               <div>
-                <label className="block text-xs font-semibold mb-1">Seuil rupture</label>
+                <label className="block text-xs font-semibold mb-1">Bouteilles / casier 📦</label>
+                <input type="number" value={edition.bouteillesParCasier} onChange={(e) => setEdition({ ...edition, bouteillesParCasier: e.target.value })} className="border rounded-lg p-2 w-full" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">Seuil rupture (bouteilles)</label>
                 <input type="number" value={edition.seuilAlerte} onChange={(e) => setEdition({ ...edition, seuilAlerte: e.target.value })} className="border rounded-lg p-2 w-full" />
               </div>
             </div>
