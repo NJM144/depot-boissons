@@ -294,6 +294,34 @@ export async function pointHistorique(depotId, periode) {
   return data || []
 }
 
+// Le point sur une PLAGE de dates libre (du jour debut au jour fin INCLUS).
+//  debut / fin : chaînes 'AAAA-MM-JJ' (issues d'un <input type="date">).
+export async function getPointIntervalle(depotId, debut, fin) {
+  const { data, error } = await supabase.rpc('get_point_intervalle', {
+    p_depot_id: depotId,
+    p_debut: debut,
+    p_fin: fin,
+  })
+  if (error) throw error
+  return data
+}
+
+// Historique JOURNALIER pour la courbe sur une plage (vue v_point_jour filtrée).
+export async function pointHistoriqueIntervalle(depotId, debut, fin) {
+  const finExclue = new Date(fin + 'T00:00:00')
+  finExclue.setDate(finExclue.getDate() + 1) // borne haute = lendemain de "fin"
+  const finIso = finExclue.toISOString().slice(0, 10)
+  const { data, error } = await supabase
+    .from('v_point_jour')
+    .select('*')
+    .eq('depot_id', depotId)
+    .gte('periode', debut)
+    .lt('periode', finIso)
+    .order('periode')
+  if (error) throw error
+  return data || []
+}
+
 // ----------------------------------------------------------------------------
 //  TEMPS RÉEL — abonnement aux ventes VALIDÉES d'un dépôt
 //   onVente(mouvement) est appelé quand une vente devient 'valide' (le patron
@@ -310,6 +338,89 @@ export function abonnerVentes(depotId, onVente) {
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mouvements', filter: `depot_id=eq.${depotId}` }, traiter)
     .subscribe()
   return () => supabase.removeChannel(canal)
+}
+
+// ----------------------------------------------------------------------------
+//  ACTIONNAIRES — fonds de commerce, apports, charges, partage des bénéfices
+// ----------------------------------------------------------------------------
+
+// Fonds de commerce du dépôt (valeur totale qui sert au calcul des parts)
+export async function getFondCommerce(depotId) {
+  const { data, error } = await supabase
+    .from('depots').select('fond_de_commerce').eq('id', depotId).single()
+  if (error) throw error
+  return Number(data?.fond_de_commerce) || 0
+}
+export async function setFondCommerce(depotId, montant) {
+  const { error } = await supabase
+    .from('depots').update({ fond_de_commerce: Number(montant) || 0 }).eq('id', depotId)
+  if (error) throw error
+}
+
+// CRUD actionnaires
+export async function listerActionnaires(depotId) {
+  const { data, error } = await supabase
+    .from('actionnaires').select('*').eq('depot_id', depotId).order('created_at')
+  if (error) throw error
+  return data || []
+}
+export async function ajouterActionnaire(depotId, { nom, apport, code }) {
+  const { error } = await supabase.from('actionnaires').insert({
+    depot_id: depotId, nom, apport: Number(apport) || 0, code: String(code).trim(),
+  })
+  if (error) throw error
+}
+export async function modifierActionnaire(id, champs) {
+  const maj = {}
+  if (champs.nom != null) maj.nom = champs.nom
+  if (champs.apport != null) maj.apport = Number(champs.apport) || 0
+  if (champs.code != null) maj.code = String(champs.code).trim()
+  if (champs.actif != null) maj.actif = !!champs.actif
+  const { error } = await supabase.from('actionnaires').update(maj).eq('id', id)
+  if (error) throw error
+}
+export async function supprimerActionnaire(id) {
+  const { error } = await supabase.from('actionnaires').delete().eq('id', id)
+  if (error) throw error
+}
+
+// Charges d'un actionnaire pour un mois ('AAAA-MM-01')
+export async function listerCharges(actionnaireId, mois) {
+  const { data, error } = await supabase
+    .from('charges_actionnaire').select('*')
+    .eq('actionnaire_id', actionnaireId).eq('mois', mois).order('created_at')
+  if (error) throw error
+  return data || []
+}
+export async function ajouterCharge(depotId, actionnaireId, { libelle, montant, mois }) {
+  const { error } = await supabase.from('charges_actionnaire').insert({
+    depot_id: depotId, actionnaire_id: actionnaireId,
+    libelle, montant: Number(montant) || 0, mois,
+  })
+  if (error) throw error
+}
+export async function supprimerCharge(id) {
+  const { error } = await supabase.from('charges_actionnaire').delete().eq('id', id)
+  if (error) throw error
+}
+
+// Le compte d'un actionnaire pour un mois (authentifié par son CODE).
+//  mois : 'AAAA-MM-01'. Renvoie l'objet calculé (ou { trouve:false }).
+export async function getCompteActionnaire(code, mois) {
+  const { data, error } = await supabase.rpc('get_compte_actionnaire', {
+    p_code: String(code).trim(), p_mois: mois,
+  })
+  if (error) throw error
+  return data
+}
+
+// Vue patron : marge du mois + bénéfice de tous les actionnaires (un appel).
+export async function getBeneficesActionnaires(depotId, mois) {
+  const { data, error } = await supabase.rpc('get_benefices_actionnaires', {
+    p_depot_id: depotId, p_mois: mois,
+  })
+  if (error) throw error
+  return data
 }
 
 // ----------------------------------------------------------------------------

@@ -17,20 +17,34 @@ const PERIODES = [
   { cle: 'mois', label: 'MOIS' },
 ]
 
+// Date du jour au format 'AAAA-MM-JJ' (locale, pas UTC)
+function aujourdhui() {
+  const t = new Date()
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+}
+
 export default function PointPeriodique({ depotId }) {
-  const [periode, setPeriode] = useState('jour')
+  const [periode, setPeriode] = useState('jour') // 'jour' | 'semaine' | 'mois' | 'plage'
+  const [du, setDu] = useState(aujourdhui())
+  const [au, setAu] = useState(aujourdhui())
   const [point, setPoint] = useState(null)
   const [histo, setHisto] = useState([])
 
   // Charge le point + l'historique pour le graphique
   const charger = useCallback(async () => {
-    const [p, h] = await Promise.all([
-      Cloud.getPoint(depotId, periode),
-      Cloud.pointHistorique(depotId, periode),
-    ])
+    const [p, h] =
+      periode === 'plage'
+        ? await Promise.all([
+            Cloud.getPointIntervalle(depotId, du, au),
+            Cloud.pointHistoriqueIntervalle(depotId, du, au),
+          ])
+        : await Promise.all([
+            Cloud.getPoint(depotId, periode),
+            Cloud.pointHistorique(depotId, periode),
+          ])
     setPoint(p)
     setHisto(h)
-  }, [depotId, periode])
+  }, [depotId, periode, du, au])
 
   useEffect(() => {
     charger()
@@ -47,19 +61,54 @@ export default function PointPeriodique({ depotId }) {
   return (
     <div className="h-full overflow-y-auto no-scrollbar bg-slate-100 p-3 pb-20">
       {/* Sélecteur de période */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
+      <div className="grid grid-cols-4 gap-2 mb-2">
         {PERIODES.map((p) => (
           <button
             key={p.cle}
             onClick={() => setPeriode(p.cle)}
-            className={`rounded-xl py-3 font-bold ${
+            className={`rounded-xl py-3 font-bold text-sm ${
               periode === p.cle ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600'
             }`}
           >
             {p.label}
           </button>
         ))}
+        <button
+          onClick={() => setPeriode('plage')}
+          className={`rounded-xl py-3 font-bold text-sm ${
+            periode === 'plage' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600'
+          }`}
+        >
+          📅 Dates
+        </button>
       </div>
+
+      {/* Panneau plage de dates (du … au …) */}
+      {periode === 'plage' && (
+        <div className="bg-white rounded-xl p-3 mb-3 shadow-sm flex items-end gap-2">
+          <label className="flex-1 text-xs font-semibold text-slate-600">
+            Du
+            <input
+              type="date"
+              value={du}
+              max={au}
+              onChange={(e) => setDu(e.target.value)}
+              className="mt-1 border rounded-lg p-2 w-full text-sm font-normal text-slate-800"
+            />
+          </label>
+          <label className="flex-1 text-xs font-semibold text-slate-600">
+            Au
+            <input
+              type="date"
+              value={au}
+              min={du}
+              max={aujourdhui()}
+              onChange={(e) => setAu(e.target.value)}
+              className="mt-1 border rounded-lg p-2 w-full text-sm font-normal text-slate-800"
+            />
+          </label>
+        </div>
+      )}
 
       {/* Cartes de synthèse */}
       <div className="grid grid-cols-2 gap-2 mb-3">
