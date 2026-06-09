@@ -91,7 +91,7 @@ export default function CatalogueSupabase({ depotId }) {
             <div className="flex-1 min-w-0">
               <p className="font-semibold truncate">{b.nom}</p>
               <p className="text-sm text-slate-500">
-                Achat {formaterFCFA(b.prixAchat)} · Vente {formaterFCFA(b.prixVente)}
+                Achat {formaterFCFA(b.prixAchat)} · Vente {formaterFCFA(b.prixVente)} <span className="text-slate-400">/ casier</span>
               </p>
             </div>
             <button onClick={() => ouvrir(b)} className="bg-slate-200 rounded-lg px-3 py-2">✏️</button>
@@ -135,17 +135,27 @@ export default function CatalogueSupabase({ depotId }) {
               ))}
             </div>
 
-            <p className="text-xs text-slate-500 mb-1">💡 Les prix sont <b>par bouteille</b>.</p>
+            <p className="text-xs text-slate-500 mb-1">💡 Les prix sont <b>par casier</b> (le prix d'une bouteille = prix ÷ bouteilles par casier).</p>
             <div className="grid grid-cols-2 gap-2 mb-2">
               <div>
-                <label className="block text-xs font-semibold mb-1">Achat / bouteille (FCFA)</label>
+                <label className="block text-xs font-semibold mb-1">Achat / casier (FCFA)</label>
                 <input type="number" value={edition.prixAchat} onChange={(e) => setEdition({ ...edition, prixAchat: e.target.value })} className="border rounded-lg p-2 w-full" />
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1">Vente / bouteille (FCFA)</label>
+                <label className="block text-xs font-semibold mb-1">Vente / casier (FCFA)</label>
                 <input type="number" value={edition.prixVente} onChange={(e) => setEdition({ ...edition, prixVente: e.target.value })} className="border rounded-lg p-2 w-full" />
               </div>
             </div>
+            {(() => {
+              const bpc = Number(edition.bouteillesParCasier) || 12
+              const aBt = (Number(edition.prixAchat) || 0) / bpc
+              const vBt = (Number(edition.prixVente) || 0) / bpc
+              return (
+                <p className="text-xs text-emerald-700 bg-emerald-50 rounded-lg p-2 mb-2">
+                  🍾 Par bouteille : achat <b>{formaterFCFA(Math.round(aBt))}</b> · vente <b>{formaterFCFA(Math.round(vBt))}</b>
+                </p>
+              )
+            })()}
             <div className="grid grid-cols-2 gap-2 mb-4">
               <div>
                 <label className="block text-xs font-semibold mb-1">Bouteilles / casier 📦</label>

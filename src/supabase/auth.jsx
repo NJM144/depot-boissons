@@ -31,19 +31,42 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    // Session initiale (restaurée depuis le stockage persistant)
+    let actif = true
+
+    // Session initiale (restaurée depuis le stockage persistant).
+    // try/finally garantit qu'on sort TOUJOURS de l'écran « Chargement… »,
+    // même si la lecture du profil échoue (réseau coupé, erreur RLS, etc.).
     supabase.auth.getSession().then(async ({ data }) => {
+      if (!actif) return
       setSession(data.session)
-      await chargerProfil(data.session?.user?.id)
-      setChargement(false)
+      try {
+        await chargerProfil(data.session?.user?.id)
+      } finally {
+        if (actif) setChargement(false)
+      }
     })
 
-    // Écoute les changements d'auth (login / logout / refresh)
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_evt, sess) => {
+    // Écoute les changements d'auth (login / logout / refresh).
+    // ⚠️ Supabase impose de NE PAS appeler de fonction supabase.* (async)
+    // directement dans ce callback : cela provoque un deadlock du verrou
+    // d'auth au redémarrage de l'app (token refresh) → bloqué sur « Chargement… ».
+    // On diffère donc l'appel hors du callback avec setTimeout(0).
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, sess) => {
+      if (!actif) return
       setSession(sess)
-      await chargerProfil(sess?.user?.id)
+      setTimeout(async () => {
+        if (!actif) return
+        try {
+          await chargerProfil(sess?.user?.id)
+        } finally {
+          if (actif) setChargement(false)
+        }
+      }, 0)
     })
-    return () => sub.subscription.unsubscribe()
+    return () => {
+      actif = false
+      sub.subscription.unsubscribe()
+    }
   }, [])
 
   // Connexion e-mail / mot de passe

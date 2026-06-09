@@ -50,10 +50,10 @@ export default function AValider({ depotId, onMajCompteur }) {
       clic()
       if (l.kind === 'casse') {
         await Cloud.validerCasse(l.id, { quantite: l.quantite })
-      } else if (l.type === 'sortie') {
-        await Cloud.validerMouvement(l.id, { quantite: l.quantite, montant: l.montant })
       } else {
-        await Cloud.validerMouvement(l.id, { quantite: l.quantite })
+        // Vente (argent reçu) ou réception (prix d'achat) : montant corrigeable.
+        // Pour la réception, ce prix unitaire devient le prix d'achat catalogue.
+        await Cloud.validerMouvement(l.id, { quantite: l.quantite, montant: l.montant })
       }
       succes()
       // Retire la ligne validée de la file
@@ -117,7 +117,9 @@ export default function AValider({ depotId, onMajCompteur }) {
                       </span>
                     )}
                     {l.kind === 'casse' && (
-                      <span className="ml-2 text-xs bg-slate-200 rounded px-1.5 py-0.5">🍾 bouteille</span>
+                      <span className="ml-2 text-xs bg-slate-200 rounded px-1.5 py-0.5">
+                        {l.unite === 'casier' ? '📦 casier' : '🍾 bouteille'}
+                      </span>
                     )}
                   </p>
                   <p className="text-sm text-slate-600 truncate">
@@ -143,12 +145,14 @@ export default function AValider({ depotId, onMajCompteur }) {
                     className="border rounded-lg p-2 w-20 text-lg font-bold"
                   />
                 </label>
-                {l.type === 'sortie' && (
+                {(l.type === 'sortie' || l.type === 'entree') && (
                   <label className="flex flex-col text-xs text-slate-500 flex-1">
-                    Montant (FCFA) — corrigeable
+                    {l.type === 'sortie'
+                      ? 'Montant reçu (FCFA) — corrigeable'
+                      : "Prix d'achat (FCFA) — corrigeable"}
                     <input
                       type="number"
-                      value={l.montant}
+                      value={l.montant ?? ''}
                       onChange={(e) => editer(l.id, 'montant', e.target.value)}
                       className="border rounded-lg p-2 w-full text-lg font-bold"
                     />

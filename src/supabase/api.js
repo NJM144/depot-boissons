@@ -82,9 +82,10 @@ function normaliserBoisson(r) {
     emoji: r.emoji,
     photo: r.photo,
     couleurCasier: r.couleur_casier,
-    prixAchat: r.prix_achat,       // undefined côté gérant (colonne masquée)
-    prixVente: r.prix_vente,
-    prixReference: r.prix_vente,   // prix / bouteille — utilisé par le clavier monétaire
+    prixAchat: r.prix_achat,       // PAR CASIER ; undefined côté gérant (colonne masquée)
+    prixVente: r.prix_vente,       // PAR CASIER
+    // prixReference = prix d'UNE bouteille = prix_vente casier / bpc (clavier gérant)
+    prixReference: (Number(r.prix_vente) || 0) / (r.bouteilles_par_casier || 12),
     bouteillesParCasier: r.bouteilles_par_casier || 12,
     seuilAlerte: r.seuil_alerte,
     actif: r.actif,
@@ -100,8 +101,12 @@ function normaliserBoisson(r) {
 //  - unite   : 'bouteille' | 'casier' (le trigger convertit en bouteilles)
 //  La ligne est créée avec statut 'en_attente' (défaut SQL) : le patron validera.
 export async function ajouterMouvement({ depotId, boissonId, type, quantite, montant, unite, gerantId }) {
-  // On envoie le montant EXACT (pas d'arrondi) ; le trigger calcule la marge.
-  const montantTotal = type === 'sortie' ? Number(montant) || 0 : null
+  // Montant EXACT (pas d'arrondi) ; le trigger calcule la marge.
+  //  - sortie  : argent reçu (0 si non saisi)
+  //  - entrée  : prix d'achat payé ; null => le trigger retombe sur le prix
+  //              d'achat catalogue × quantité.
+  const montantSaisi = Number(montant) > 0 ? Number(montant) : null
+  const montantTotal = type === 'sortie' ? Number(montant) || 0 : montantSaisi
   const { error } = await supabase.from('mouvements').insert({
     depot_id: depotId,
     boisson_id: boissonId,
@@ -136,11 +141,12 @@ export async function listerMouvements(depotId, filtres = {}) {
 // ----------------------------------------------------------------------------
 //  CASSES (pertes)
 // ----------------------------------------------------------------------------
-export async function ajouterCasse({ depotId, boissonId, quantite, gerantId }) {
+export async function ajouterCasse({ depotId, boissonId, quantite, unite, gerantId }) {
   const { error } = await supabase.from('casses').insert({
     depot_id: depotId,
     boisson_id: boissonId,
     quantite,
+    unite: unite || 'bouteille', // le trigger convertit en bouteilles
     gerant_id: gerantId || null,
   })
   if (error) throw error
@@ -179,6 +185,8 @@ export async function listerEnAttente(depotId) {
       id: c.id,
       type: 'casse',
       quantite: c.quantite,
+      unite: c.unite, // 'bouteille' | 'casier'
+      quantiteBouteilles: c.quantite_bouteilles,
       montant: c.cout_total,
       created_at: c.created_at,
       boisson: parId.get(c.boisson_id),
@@ -225,11 +233,17 @@ export async function rejeterCasse(id) {
   if (error) throw error
 }
 
+// Compteur de canaux : garantit un NOM UNIQUE par abonnement. Sans ça, deux
+// composants (ex. ProprietaireApp + AValider) qui s'abonnent au même topic
+// récupèrent la MÊME instance de canal déjà souscrite, et le 2ᵉ `.on()` lève
+// « cannot add postgres_changes callbacks after subscribe() ».
+let _seqCanal = 0
+
 // Abonnement temps réel à TOUT changement (mouvements + casses) du dépôt :
 // utilisé par la file de validation pour se rafraîchir en direct.
 export function abonnerChangements(depotId, onChange) {
   const canal = supabase
-    .channel(`changements-${depotId}`)
+    .channel(`changements-${depotId}-${++_seqCanal}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'mouvements', filter: `depot_id=eq.${depotId}` }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'casses', filter: `depot_id=eq.${depotId}` }, onChange)
     .subscribe()
@@ -291,7 +305,7 @@ export function abonnerVentes(depotId, onVente) {
     if (m?.type === 'sortie' && m?.statut === 'valide') onVente(m)
   }
   const canal = supabase
-    .channel(`ventes-${depotId}`)
+    .channel(`ventes-${depotId}-${++_seqCanal}`)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mouvements', filter: `depot_id=eq.${depotId}` }, traiter)
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mouvements', filter: `depot_id=eq.${depotId}` }, traiter)
     .subscribe()

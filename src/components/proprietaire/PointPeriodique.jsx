@@ -82,9 +82,9 @@ export default function PointPeriodique({ depotId }) {
           <thead>
             <tr className="text-left text-slate-500 border-b">
               <th className="py-1">Boisson</th>
-              <th className="text-right">Achat</th>
-              <th className="text-right">Vente</th>
-              <th className="text-right">Vendu</th>
+              <th className="text-right">Achat<span className="text-[10px] text-slate-400">/cs</span></th>
+              <th className="text-right">Vente<span className="text-[10px] text-slate-400">/cs</span></th>
+              <th className="text-right">Vendu<span className="text-[10px] text-slate-400">/bt</span></th>
               <th className="text-right">Marge</th>
             </tr>
           </thead>
@@ -95,7 +95,7 @@ export default function PointPeriodique({ depotId }) {
                 <td className="text-right text-slate-500">{Number(d.prix_achat).toLocaleString('fr-FR')}</td>
                 <td className="text-right text-slate-500">{Number(d.prix_vente).toLocaleString('fr-FR')}</td>
                 <td className="text-right font-semibold">{d.quantite_vendue}</td>
-                <td className="text-right font-bold text-emerald-600">
+                <td className={`text-right font-bold ${Number(d.marge) < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                   {Number(d.marge).toLocaleString('fr-FR')}
                 </td>
               </tr>

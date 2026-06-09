@@ -79,21 +79,24 @@ export default function ClavierMonetaire({ montant, historique, onChange, prixSu
         <span className="text-white text-3xl font-black mt-1">{formaterFCFA(montant)}</span>
       </button>
 
-      {/* ----- BOUTONS ACTIONS : annuler dernier + suggestion ----- */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* ----- BOUTONS ACTIONS : annuler dernier (+ suggestion si dispo) ----- */}
+      {/* La suggestion n'apparaît que pour les ventes ; en réception le prix
+          d'achat est masqué au gérant, donc pas de suggestion. */}
+      <div className={prixSuggere ? 'grid grid-cols-2 gap-2' : ''}>
         <button
           onClick={annulerDernier}
-          className="btn-tactile bg-amber-500 active:bg-amber-600 text-white h-16 text-2xl flex-row gap-2"
+          className="btn-tactile bg-amber-500 active:bg-amber-600 text-white w-full h-16 text-2xl flex-row gap-2"
         >
           ↩️ Annuler
         </button>
-        <button
-          onClick={utiliserSuggestion}
-          disabled={!prixSuggere}
-          className="btn-tactile bg-sky-600 active:bg-sky-700 disabled:opacity-40 text-white h-16 text-xl flex-row gap-2"
-        >
-          💡 {prixSuggere ? formaterFCFA(prixSuggere) : '—'}
-        </button>
+        {prixSuggere ? (
+          <button
+            onClick={utiliserSuggestion}
+            className="btn-tactile bg-sky-600 active:bg-sky-700 text-white h-16 text-xl flex-row gap-2"
+          >
+            💡 {formaterFCFA(prixSuggere)}
+          </button>
+        ) : null}
       </div>
 
       {/* ----- CLAVIER : BILLETS puis PIÈCES ----- */}

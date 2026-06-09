@@ -16,6 +16,7 @@ export const adapterLocal = {
   // En local on ne gère pas l'unité (mode démo) : on stocke la quantité telle quelle
   ajouterMouvement: ({ boissonId, type, quantite, montant }) =>
     Local.ajouterMouvement({ boissonId, type, quantite, montant }),
+  // En local (démo) on ignore l'unité, comme pour les mouvements
   ajouterCasse: ({ boissonId, quantite }) => Local.ajouterCasse({ boissonId, quantite }),
   calculerStocks: () => Local.calculerStocks(),
 }
@@ -28,8 +29,8 @@ export function adapterSupabase({ depotId, gerantId }) {
     listerBoissons: () => Cloud.listerBoissonsGerant(),
     ajouterMouvement: ({ boissonId, type, quantite, montant, unite }) =>
       Cloud.ajouterMouvement({ depotId, boissonId, type, quantite, montant, unite, gerantId }),
-    ajouterCasse: ({ boissonId, quantite }) =>
-      Cloud.ajouterCasse({ depotId, boissonId, quantite, gerantId }),
+    ajouterCasse: ({ boissonId, quantite, unite }) =>
+      Cloud.ajouterCasse({ depotId, boissonId, quantite, unite, gerantId }),
     calculerStocks: () => Cloud.calculerStocks(depotId),
   }
 }

@@ -34,8 +34,8 @@ export default function RecapVisuel({
 
   const valider = () => {
     succes()
-    // Confirmation vocale complète (avec l'unité)
-    const argent = estEntree ? '' : `, ${montantEnVoix(montant)}`
+    // Confirmation vocale complète (avec l'unité et le montant, achat ou vente)
+    const argent = montant > 0 ? `, ${montantEnVoix(montant)}` : ''
     parler(
       `${estEntree ? 'Entrée' : 'Sortie'}, ${boisson?.nom}, ${quantite} ${motUnite}${argent}. Validé`
     )
@@ -88,9 +88,12 @@ export default function RecapVisuel({
           {quantite > 20 && <span className="text-white text-2xl self-center">…</span>}
         </div>
 
-        {/* Montant en billets empilés — UNIQUEMENT pour une vente */}
-        {!estEntree && (
+        {/* Montant en billets empilés : argent REÇU (vente) ou prix d'ACHAT payé (réception) */}
+        {montant > 0 && (
           <div className="bg-slate-800 rounded-2xl p-3 w-full flex flex-col items-center">
+            <span className="text-slate-300 text-sm font-bold mb-1">
+              {estEntree ? '💵 PAYÉ' : '💰 REÇU'}
+            </span>
             <div className="flex flex-wrap justify-center gap-1">
               {pile.map((c, i) => (
                 <div key={i} className="relative">

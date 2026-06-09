@@ -97,7 +97,7 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
     if (etape === 'unite') return setEtape('sens')
     if (etape === 'quantite') return setEtape('unite')
     if (etape === 'montant') return setEtape('quantite')
-    if (etape === 'recap') return setEtape(type === 'sortie' ? 'montant' : 'quantite')
+    if (etape === 'recap') return setEtape('montant')
   }
 
   // ----- Sous-flux CASSÉ -----------------------------------------------------
@@ -215,15 +215,16 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
               />
             </div>
             <div className="p-3">
-              {/* Vente → étape montant ; Réception → directement le récap (pas d'argent) */}
+              {/* Vente → argent reçu ; Réception → prix d'achat payé. Toujours le clavier. */}
               <button
                 onClick={() => {
                   clic()
-                  setEtape(type === 'sortie' ? 'montant' : 'recap')
+                  parler(type === 'sortie' ? "Combien d'argent reçu ?" : 'Combien payé ?')
+                  setEtape('montant')
                 }}
                 className="btn-tactile bg-sky-600 active:bg-sky-700 text-white w-full h-20 text-4xl flex-row gap-3"
               >
-                {type === 'sortie' ? '➡️ 💰' : '➡️ ✓'}
+                ➡️ 💰
               </button>
             </div>
           </div>
@@ -231,11 +232,24 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
 
         {etape === 'montant' && (
           <div className="h-full flex flex-col">
+            {/* Bannière : argent REÇU (vente) ou prix d'ACHAT payé (réception) */}
+            <button
+              onClick={() => parler(type === 'sortie' ? "Combien d'argent reçu ?" : 'Combien payé ?')}
+              className={`w-full flex items-center justify-center gap-2 py-2 ${
+                type === 'sortie' ? 'bg-emerald-700' : 'bg-sky-800'
+              }`}
+            >
+              <span className="text-3xl">{type === 'sortie' ? '💰⬆️' : '💵🛒'}</span>
+              <span className="text-white text-2xl font-black">
+                {type === 'sortie' ? 'ARGENT REÇU' : "PRIX D'ACHAT"}
+              </span>
+            </button>
             <div className="flex-1 min-h-0">
+              {/* Suggestion de prix uniquement pour les ventes (prix d'achat masqué au gérant) */}
               <ClavierMonetaire
                 montant={montant}
                 historique={histoCoupures}
-                prixSuggere={prixSuggere}
+                prixSuggere={type === 'sortie' ? prixSuggere : 0}
                 onChange={(total, histo) => {
                   setMontant(total)
                   setHistoCoupures(histo)
