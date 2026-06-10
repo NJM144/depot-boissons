@@ -37,11 +37,39 @@ export default function CommandeCalculatrice({ boissons, adapter, onTermine }) {
   }, [adapter])
 
   const bpcDe = (b) => b.bouteillesParCasier || 12
+
+  // Affichage d'un nombre de casiers pouvant comporter un demi : 2.5 -> "2 ½"
+  const casiersTexte = (n) => {
+    if (!n) return '0'
+    const ent = Math.floor(n)
+    const demi = n % 1 !== 0
+    if (ent === 0) return '½'
+    return `${ent}${demi ? ' ½' : ''}`
+  }
+  const casiersVoix = (n) => {
+    if (!n) return '0'
+    const ent = Math.floor(n)
+    const demi = n % 1 !== 0
+    if (ent === 0) return 'demi casier'
+    return `${ent}${demi ? ' et demi' : ''}`
+  }
+
   const modifier = (b, delta) => {
     clic()
     setCommande((c) => {
       const n = Math.max(0, (c[b.id] || 0) + delta)
-      if (delta > 0) parler(`${n}`)
+      if (delta > 0) parler(casiersVoix(n))
+      return { ...c, [b.id]: n }
+    })
+  }
+  // Bascule le demi-casier (ajoute 0,5 si entier, retire 0,5 si déjà un demi)
+  const basculerDemi = (b) => {
+    clic()
+    setCommande((c) => {
+      const cur = c[b.id] || 0
+      const aDemi = cur % 1 !== 0
+      const n = aDemi ? Math.max(0, cur - 0.5) : cur + 0.5
+      if (!aDemi) parler('demi casier')
       return { ...c, [b.id]: n }
     })
   }
@@ -62,12 +90,17 @@ export default function CommandeCalculatrice({ boissons, adapter, onTermine }) {
   const totalBouteilles = boissons.reduce((s, b) => s + (commande[b.id] || 0) * bpcDe(b), 0)
   const totalArgent = boissons.reduce((s, b) => s + (commande[b.id] || 0) * (prix[b.id] || 0), 0)
 
+  const phraseCasiers = (n) =>
+    n === 0.5 ? 'un demi casier'
+      : n % 1 !== 0 ? `${Math.floor(n)} casiers et demi`
+      : `${n} casier${n > 1 ? 's' : ''}`
+
   const lire = () => {
     const lignes = boissons
       .filter((b) => commande[b.id] > 0)
-      .map((b) => `${commande[b.id]} casiers de ${b.nom}`)
+      .map((b) => `${phraseCasiers(commande[b.id])} de ${b.nom}`)
     const argent = totalArgent > 0 ? ` Total à payer ${montantEnVoix(totalArgent)}.` : ''
-    parler(lignes.length ? `${lignes.join(', ')}. ${totalCasiers} casiers.${argent}` : 'Aucune commande')
+    parler(lignes.length ? `${lignes.join(', ')}.${argent}` : 'Aucune commande')
   }
   const vider = () => { clic(); setCommande({}); setPrix({}); parler('Effacé') }
 
@@ -124,10 +157,15 @@ export default function CommandeCalculatrice({ boissons, adapter, onTermine }) {
                 <div className="flex items-center gap-2">
                   <button onClick={() => modifier(b, -1)}
                     className="btn-tactile bg-red-500 active:bg-red-600 text-white w-11 h-11 text-3xl rounded-xl">−</button>
-                  <span className="text-3xl font-black w-9 text-center">{n}</span>
+                  <span className="text-3xl font-black w-12 text-center">{casiersTexte(n)}</span>
                   <button onClick={() => modifier(b, +1)}
                     className="btn-tactile bg-emerald-600 active:bg-emerald-700 text-white w-11 h-11 text-3xl rounded-xl">+</button>
                 </div>
+                {/* Demi-casier */}
+                <button onClick={() => basculerDemi(b)}
+                  className={`w-full rounded-lg py-1 text-sm font-bold ${n % 1 !== 0 ? 'bg-purple-600 text-white' : 'bg-purple-100 text-purple-700'}`}>
+                  ½ casier
+                </button>
                 {/* Prix d'un casier + total ligne */}
                 <button onClick={() => ouvrirPrix(b)}
                   className={`w-full mt-1 rounded-xl py-1.5 font-bold text-sm ${pu ? 'bg-sky-100 text-sky-800' : 'bg-slate-200 text-slate-600'}`}>
@@ -153,7 +191,7 @@ export default function CommandeCalculatrice({ boissons, adapter, onTermine }) {
         <div className="flex items-center justify-around mb-2">
           <div className="text-center">
             <p className="text-xs opacity-80">Casiers</p>
-            <p className="text-2xl font-black">{totalCasiers}</p>
+            <p className="text-2xl font-black">{casiersTexte(totalCasiers)}</p>
           </div>
           <div className="text-center">
             <p className="text-xs opacity-80">Bouteilles</p>
