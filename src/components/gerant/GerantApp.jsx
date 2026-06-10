@@ -21,6 +21,7 @@ import CompteurQuantite from './CompteurQuantite.jsx'
 import ClavierMonetaire from './ClavierMonetaire.jsx'
 import RecapVisuel from './RecapVisuel.jsx'
 import BoissonCassee from './BoissonCassee.jsx'
+import CommandeCalculatrice from './CommandeCalculatrice.jsx'
 import PhotoBoisson from '../commun/PhotoBoisson.jsx'
 
 export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
@@ -36,6 +37,7 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
   // État du parcours
   const [etape, setEtape] = useState('selection')
   const [casseMode, setCasseMode] = useState(false)
+  const [commandeMode, setCommandeMode] = useState(false)
   const [boisson, setBoisson] = useState(null)
   const [type, setType] = useState(null) // 'entree' | 'sortie'
   const [unite, setUnite] = useState('bouteille') // 'bouteille' | 'casier'
@@ -54,6 +56,7 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
     setMontant(0)
     setHistoCoupures([])
     setCasseMode(false)
+    setCommandeMode(false)
     setEtape('selection')
   }
 
@@ -119,6 +122,25 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
     )
   }
 
+  // ----- Sous-flux COMMANDE (calculatrice de réappro) ------------------------
+  if (commandeMode) {
+    return (
+      <div className="h-full flex flex-col bg-slate-900">
+        <div className="flex items-center gap-2 p-2 bg-slate-800">
+          <button
+            onClick={recommencer}
+            className="btn-tactile bg-slate-600 active:bg-slate-700 text-white w-16 h-14 text-3xl"
+          >
+            ⬅️
+          </button>
+        </div>
+        <div className="flex-1 min-h-0">
+          <CommandeCalculatrice boissons={boissons} adapter={adapter} onTermine={recommencer} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="h-full flex flex-col bg-slate-900">
       {/* ---------- BARRE HAUT : retour + fil d'aide visuel ---------- */}
@@ -141,17 +163,28 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
           )}
         </div>
 
-        {/* Bouton CASSÉ (accessible depuis l'écran de sélection) */}
+        {/* Boutons COMMANDE + CASSÉ (accessibles depuis l'écran de sélection) */}
         {etape === 'selection' && (
-          <button
-            onClick={() => {
-              clic()
-              setCasseMode(true)
-            }}
-            className="btn-tactile bg-amber-600 active:bg-amber-700 text-white w-20 h-14 text-3xl"
-          >
-            🥃💥
-          </button>
+          <>
+            <button
+              onClick={() => {
+                clic()
+                setCommandeMode(true)
+              }}
+              className="btn-tactile bg-sky-600 active:bg-sky-700 text-white w-20 h-14 text-3xl"
+            >
+              🛒🧮
+            </button>
+            <button
+              onClick={() => {
+                clic()
+                setCasseMode(true)
+              }}
+              className="btn-tactile bg-amber-600 active:bg-amber-700 text-white w-20 h-14 text-3xl"
+            >
+              🥃💥
+            </button>
+          </>
         )}
       </div>
 
