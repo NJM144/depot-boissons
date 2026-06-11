@@ -165,46 +165,70 @@ function ModalActionnaire({ depotId, actionnaire, onFerme, onSauve }) {
 }
 
 // ----- Modal charges d'un actionnaire pour le mois -----
+//  Formulaire d'ajout EN HAUT (au-dessus du clavier Android), liste en dessous.
 function ModalCharges({ depotId, actionnaire, mois, onFerme }) {
   const [charges, setCharges] = useState([])
   const [libelle, setLibelle] = useState('')
   const [montant, setMontant] = useState('')
+  const [err, setErr] = useState(null)
+  const [enCours, setEnCours] = useState(false)
 
-  const recharger = useCallback(() => Cloud.listerCharges(actionnaire.id, mois).then(setCharges), [actionnaire.id, mois])
+  const recharger = useCallback(() => Cloud.listerCharges(actionnaire.id, mois).then(setCharges).catch(() => {}), [actionnaire.id, mois])
   useEffect(() => { recharger() }, [recharger])
 
   const ajouter = async () => {
-    if (!libelle.trim() || !(Number(montant) > 0)) return
-    await Cloud.ajouterCharge(depotId, actionnaire.id, { libelle, montant, mois })
-    setLibelle(''); setMontant(''); recharger()
+    setErr(null)
+    if (!libelle.trim()) return setErr('Écris un libellé (ex : transport).')
+    if (!(Number(montant) > 0)) return setErr('Entre un montant valide.')
+    setEnCours(true)
+    try {
+      await Cloud.ajouterCharge(depotId, actionnaire.id, { libelle: libelle.trim(), montant, mois })
+      setLibelle(''); setMontant('')
+      await recharger()
+    } catch (e) {
+      setErr(e.message || 'Erreur lors de l’ajout.')
+    } finally {
+      setEnCours(false)
+    }
   }
   const total = charges.reduce((s, c) => s + Number(c.montant), 0)
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end z-50">
-      <div className="bg-white w-full rounded-t-3xl p-4 max-h-[85%] overflow-y-auto no-scrollbar">
-        <h3 className="text-lg font-bold mb-1">💸 Charges — {actionnaire.nom}</h3>
+      <div className="bg-white w-full rounded-t-3xl p-4 max-h-[90%] overflow-y-auto no-scrollbar">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-lg font-bold">💸 Charges — {actionnaire.nom}</h3>
+          <button onClick={onFerme} className="bg-slate-200 rounded-lg px-3 py-1 text-sm font-semibold">Fermer ✕</button>
+        </div>
         <p className="text-xs text-slate-500 mb-3">Mois {mois.slice(0, 7)} · déduites de son bénéfice</p>
 
+        {/* FORMULAIRE D'AJOUT — en haut pour rester visible au-dessus du clavier */}
+        <div className="bg-slate-50 rounded-xl p-3 mb-3">
+          <label className="block text-xs font-semibold mb-1">Libellé</label>
+          <input value={libelle} onChange={(e) => setLibelle(e.target.value)}
+            className="border rounded-lg p-2 w-full mb-2" placeholder="Ex : transport, salaire…" />
+          <label className="block text-xs font-semibold mb-1">Montant (FCFA)</label>
+          <input type="number" inputMode="numeric" value={montant} onChange={(e) => setMontant(e.target.value)}
+            className="border rounded-lg p-2 w-full mb-2" placeholder="Ex : 5000" />
+          {err && <p className="text-red-600 text-sm font-semibold mb-2">{err}</p>}
+          <button onClick={ajouter} disabled={enCours}
+            className="w-full bg-emerald-600 active:bg-emerald-700 disabled:opacity-50 text-white rounded-lg py-3 font-bold">
+            {enCours ? 'Ajout…' : '➕ Ajouter la charge'}
+          </button>
+        </div>
+
+        {/* LISTE des charges du mois */}
         {charges.map((c) => (
           <div key={c.id} className="flex items-center justify-between border-b py-2 text-sm">
             <span>{c.libelle}</span>
             <span className="flex items-center gap-2">
               <b>{formaterFCFA(c.montant)}</b>
-              <button onClick={async () => { await Cloud.supprimerCharge(c.id); recharger() }} className="text-red-500">🗑️</button>
+              <button onClick={async () => { await Cloud.supprimerCharge(c.id); recharger() }} className="text-red-500 text-lg">🗑️</button>
             </span>
           </div>
         ))}
         {charges.length === 0 && <p className="text-slate-400 text-sm py-2 text-center">Aucune charge ce mois.</p>}
         <p className="text-right font-bold mt-2">Total : {formaterFCFA(total)}</p>
-
-        <div className="flex gap-2 mt-3">
-          <input value={libelle} onChange={(e) => setLibelle(e.target.value)} className="border rounded-lg p-2 flex-1" placeholder="Libellé (ex : transport)" />
-          <input type="number" value={montant} onChange={(e) => setMontant(e.target.value)} className="border rounded-lg p-2 w-28" placeholder="Montant" />
-          <button onClick={ajouter} className="bg-emerald-600 text-white rounded-lg px-3 font-semibold">+</button>
-        </div>
-
-        <button onClick={onFerme} className="w-full bg-slate-200 rounded-lg py-3 font-semibold mt-4">Fermer</button>
       </div>
     </div>
   )
