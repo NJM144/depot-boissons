@@ -1,7 +1,7 @@
 // ============================================================================
 //  MISE À JOUR — bannière proposée quand une nouvelle version est dispo
 // ----------------------------------------------------------------------------
-//  Monté à la racine de l'app. Vérifie à chaque 10ᵉ ouverture (voir updateCheck)
+//  Monté à la racine de l'app. Vérifie à chaque ouverture (voir updateCheck)
 //  et, si besoin, affiche une modale avec un GROS bouton de mise à jour + voix
 //  (utile au gérant analphabète).
 // ============================================================================
