@@ -57,9 +57,15 @@ export default function GestionActionnaires({ depotId }) {
 
       {/* Synthèse du mois */}
       <div className="grid grid-cols-2 gap-2 mb-3">
-        <Carte titre="Marge nette du commerce" valeur={data.marge_commerce} couleur="bg-emerald-500" />
+        <Carte titre="Marge à partager (parts)" valeur={data.marge_commerce} couleur="bg-emerald-500" />
         <Carte titre="Part actionnaires" valeur={`${data.part_actionnaires_pct} %`} couleur="bg-purple-600" brut />
       </div>
+      {Number(data.marge_reservee) > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3 text-sm">
+          <span className="font-semibold text-amber-800">💼 Bénéfices réservés (hors partage) : {formaterFCFA(data.marge_reservee)}</span>
+          <p className="text-xs text-amber-700 mt-0.5">Marge de produits attribuée en direct à un seul actionnaire. Marge totale du commerce : {formaterFCFA(data.marge_totale)}.</p>
+        </div>
+      )}
 
       {/* Liste des actionnaires */}
       <div className="bg-white rounded-xl p-3 shadow-sm">
@@ -93,6 +99,12 @@ export default function GestionActionnaires({ depotId }) {
               <div className="bg-slate-50 rounded p-1">Charges<br /><b className="text-amber-600">{formaterFCFA(a.charges)}</b></div>
               <div className="bg-slate-50 rounded p-1">Net<br /><b className={a.benefice_net < 0 ? 'text-red-600' : 'text-emerald-600'}>{formaterFCFA(a.benefice_net)}</b></div>
             </div>
+            {Number(a.benefice_reserve) > 0 && (
+              <p className="text-xs text-amber-700 mt-1">
+                💼 dont réservé : <b>{formaterFCFA(a.benefice_reserve)}</b>
+                {(a.produits_reserves || []).length > 0 && <span className="text-amber-600"> ({a.produits_reserves.join(', ')})</span>}
+              </p>
+            )}
           </div>
         ))}
       </div>
@@ -173,20 +185,32 @@ function ModalCharges({ depotId, actionnaire, mois, onFerme }) {
   const [err, setErr] = useState(null)
   const [enCours, setEnCours] = useState(false)
 
-  const recharger = useCallback(() => Cloud.listerCharges(actionnaire.id, mois).then(setCharges).catch(() => {}), [actionnaire.id, mois])
+  const recharger = useCallback(
+    () =>
+      Cloud.listerCharges(actionnaire.id, mois)
+        .then(setCharges)
+        .catch((e) => {
+          console.error('listerCharges', e)
+          setErr('Lecture des charges impossible : ' + (e.message || e.code || 'erreur'))
+        }),
+    [actionnaire.id, mois],
+  )
   useEffect(() => { recharger() }, [recharger])
 
   const ajouter = async () => {
     setErr(null)
     if (!libelle.trim()) return setErr('Écris un libellé (ex : transport).')
-    if (!(Number(montant) > 0)) return setErr('Entre un montant valide.')
+    // Tolère les espaces et la virgule décimale (clavier FR/Android)
+    const montantNum = Number(String(montant).replace(/\s/g, '').replace(',', '.'))
+    if (!(montantNum > 0)) return setErr('Entre un montant valide.')
     setEnCours(true)
     try {
-      await Cloud.ajouterCharge(depotId, actionnaire.id, { libelle: libelle.trim(), montant, mois })
+      await Cloud.ajouterCharge(depotId, actionnaire.id, { libelle: libelle.trim(), montant: montantNum, mois })
       setLibelle(''); setMontant('')
       await recharger()
     } catch (e) {
-      setErr(e.message || 'Erreur lors de l’ajout.')
+      console.error('ajouterCharge', e)
+      setErr(e.message || e.hint || e.code || 'Erreur lors de l’ajout.')
     } finally {
       setEnCours(false)
     }

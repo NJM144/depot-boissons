@@ -65,13 +65,30 @@ export default function ActionnaireApp({ code, onQuitter }) {
               <Ligne label="Fonds de commerce" valeur={formaterFCFA(compte.fond_de_commerce)} />
               <Ligne label="Votre part" valeur={`${compte.part_pct} %`} fort />
               <div className="border-t my-1" />
-              <Ligne label="Marge nette du commerce" valeur={formaterFCFA(compte.marge_commerce)} />
-              <Ligne label={`Bénéfice brut (${compte.part_pct}%)`} valeur={formaterFCFA(compte.benefice_brut)} />
+              <Ligne label="Marge à partager (commerce)" valeur={formaterFCFA(compte.marge_commerce)} />
+              <Ligne label={`Votre part (${compte.part_pct}%)`} valeur={formaterFCFA(compte.benefice_part ?? compte.benefice_brut)} />
+              {Number(compte.benefice_reserve) > 0 && (
+                <Ligne label="+ Produits réservés à vous" valeur={formaterFCFA(compte.benefice_reserve)} couleur="text-amber-700" />
+              )}
+              <Ligne label="= Bénéfice brut" valeur={formaterFCFA(compte.benefice_brut)} fort />
               <Ligne label="− Vos charges" valeur={formaterFCFA(compte.charges)} couleur="text-amber-600" />
               <div className="border-t my-1" />
               <Ligne label="= Bénéfice net" valeur={formaterFCFA(compte.benefice_net)}
                 fort couleur={compte.benefice_net < 0 ? 'text-red-600' : 'text-emerald-600'} />
             </div>
+
+            {/* Produits réservés à cet actionnaire */}
+            {(compte.produits_reserves || []).length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mt-3">
+                <h3 className="font-bold text-amber-800 mb-1">💼 Vos produits réservés</h3>
+                <p className="text-xs text-amber-700 mb-2">Vous touchez 100 % de leur marge ({formaterFCFA(compte.benefice_reserve)} ce mois).</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {compte.produits_reserves.map((nom, i) => (
+                    <span key={i} className="bg-white border border-amber-300 text-amber-800 rounded-full px-2.5 py-1 text-xs font-semibold">{nom}</span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Détail des charges */}
             {(compte.charges_detail || []).length > 0 && (

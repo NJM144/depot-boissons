@@ -36,16 +36,21 @@ function redimensionner(file, maxDim = 400) {
   })
 }
 
-const VIDE = { nom: '', emoji: '🥤', photo: null, couleurCasier: '#3b82f6', prixAchat: 0, prixVente: 500, bouteillesParCasier: 12, seuilAlerte: 5 }
+const VIDE = { nom: '', emoji: '🥤', photo: null, couleurCasier: '#3b82f6', prixAchat: 0, prixVente: 500, bouteillesParCasier: 12, seuilAlerte: 5, actionnaireReserveId: null }
 
 export default function CatalogueSupabase({ depotId }) {
   const [boissons, setBoissons] = useState([])
+  const [actionnaires, setActionnaires] = useState([])
   const [edition, setEdition] = useState(null)
   const fileRef = useRef(null)
+
+  // Nom de l'actionnaire à qui un produit est réservé (pour l'affichage)
+  const nomReserve = (id) => actionnaires.find((a) => a.id === id)?.nom?.trim() || null
 
   const recharger = () => Cloud.listerBoissonsProprio(depotId).then(setBoissons)
   useEffect(() => {
     recharger()
+    Cloud.listerActionnaires(depotId).then(setActionnaires).catch(() => setActionnaires([]))
   }, [depotId])
 
   const ouvrir = (b) => setEdition(b ? { ...b } : { ...VIDE })
@@ -93,6 +98,9 @@ export default function CatalogueSupabase({ depotId }) {
               <p className="text-sm text-slate-500">
                 Achat {formaterFCFA(b.prixAchat)} · Vente {formaterFCFA(b.prixVente)} <span className="text-slate-400">/ casier</span>
               </p>
+              {b.actionnaireReserveId && nomReserve(b.actionnaireReserveId) && (
+                <p className="text-xs font-semibold text-amber-700 mt-0.5">💼 Bénéfice réservé à {nomReserve(b.actionnaireReserveId)}</p>
+              )}
             </div>
             <button onClick={() => ouvrir(b)} className="bg-slate-200 rounded-lg px-3 py-2">✏️</button>
             <button onClick={() => supprimer(b)} className="bg-red-100 text-red-600 rounded-lg px-3 py-2">🗑️</button>
@@ -166,6 +174,22 @@ export default function CatalogueSupabase({ depotId }) {
                 <input type="number" value={edition.seuilAlerte} onChange={(e) => setEdition({ ...edition, seuilAlerte: e.target.value })} className="border rounded-lg p-2 w-full" />
               </div>
             </div>
+
+            {/* Bénéfice réservé à un actionnaire (sinon réparti par parts) */}
+            <label className="block text-sm font-semibold mb-1">💼 Bénéfice réservé à</label>
+            <select
+              value={edition.actionnaireReserveId || ''}
+              onChange={(e) => setEdition({ ...edition, actionnaireReserveId: e.target.value || null })}
+              className="border rounded-lg p-2 w-full mb-1"
+            >
+              <option value="">Tout le monde (réparti par parts)</option>
+              {actionnaires.filter((a) => a.actif).map((a) => (
+                <option key={a.id} value={a.id}>{a.nom?.trim()}</option>
+              ))}
+            </select>
+            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2 mb-4">
+              Si réservé, toute la marge de ce produit va à cet actionnaire seul (et n'entre pas dans le pot commun).
+            </p>
 
             <div className="flex gap-3">
               <button onClick={() => setEdition(null)} className="flex-1 bg-slate-200 rounded-lg py-3 font-semibold">Annuler</button>
