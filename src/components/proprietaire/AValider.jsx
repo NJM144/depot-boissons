@@ -128,6 +128,19 @@ export default function AValider({ depotId, onMajCompteur }) {
                       ? ` — ${l.quantiteBouteilles} 🍾 au total`
                       : ''}
                   </p>
+                  {/* Client (ventes attribuées) + mode de paiement */}
+                  {l.type === 'sortie' && (l.client || l.clientPassage) && (
+                    <p className="text-xs font-semibold truncate">
+                      <span className="text-indigo-700">
+                        {l.client ? `👤 ${l.client.nom || 'Client'}` : '🚶 Client de passage'}
+                      </span>
+                      {l.client && (
+                        <span className={l.aCredit ? 'text-orange-600 ml-1' : 'text-emerald-600 ml-1'}>
+                          {l.aCredit ? '· 📋 à crédit' : '· 💵 cash'}
+                        </span>
+                      )}
+                    </p>
+                  )}
                 </div>
                 <span className="text-xs text-slate-400">
                   {new Date(l.created_at).toLocaleTimeString('fr-FR')}

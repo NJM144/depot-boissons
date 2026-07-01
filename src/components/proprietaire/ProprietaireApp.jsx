@@ -18,6 +18,7 @@ import VentesLive from './VentesLive.jsx'
 import CatalogueSupabase from './CatalogueSupabase.jsx'
 import GestionActionnaires from './GestionActionnaires.jsx'
 import StockPatron from './StockPatron.jsx'
+import ClientsPatron from './ClientsPatron.jsx'
 import AValider from './AValider.jsx'
 import * as Cloud from '../../supabase/api.js'
 import * as DB from '../../db/database.js'
@@ -48,6 +49,7 @@ export default function ProprietaireApp({ onQuitter, modeSupabase = false, depot
         { cle: 'point', icone: '🎯', label: 'Point' },
         { cle: 'live', icone: '🔴', label: 'En direct' },
         { cle: 'stock', icone: '📦', label: 'Stock' },
+        { cle: 'clients', icone: '🧍', label: 'Clients' },
         { cle: 'catalogue', icone: '📚', label: 'Catalogue' },
         { cle: 'actionnaires', icone: '👥', label: 'Parts' },
         { cle: 'reglages', icone: '⚙️', label: 'Réglages' },
@@ -84,6 +86,7 @@ export default function ProprietaireApp({ onQuitter, modeSupabase = false, depot
         {modeSupabase && onglet === 'point' && <PointPeriodique depotId={depotId} />}
         {modeSupabase && onglet === 'live' && <VentesLive depotId={depotId} />}
         {modeSupabase && onglet === 'stock' && <StockPatron depotId={depotId} />}
+        {modeSupabase && onglet === 'clients' && <ClientsPatron depotId={depotId} />}
         {modeSupabase && onglet === 'catalogue' && <CatalogueSupabase depotId={depotId} />}
         {modeSupabase && onglet === 'actionnaires' && <GestionActionnaires depotId={depotId} />}
         {/* Réglages commun */}

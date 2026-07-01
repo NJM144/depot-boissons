@@ -22,6 +22,7 @@ import ClavierMonetaire from './ClavierMonetaire.jsx'
 import RecapVisuel from './RecapVisuel.jsx'
 import BoissonCassee from './BoissonCassee.jsx'
 import CommandeCalculatrice from './CommandeCalculatrice.jsx'
+import SelectionClient from './SelectionClient.jsx'
 import PhotoBoisson from '../commun/PhotoBoisson.jsx'
 
 export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
@@ -44,8 +45,13 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
   const [quantite, setQuantite] = useState(1)
   const [montant, setMontant] = useState(0)
   const [histoCoupures, setHistoCoupures] = useState([]) // pour annuler-dernier
+  const [client, setClient] = useState(null)            // client régulier choisi (objet)
+  const [clientPassage, setClientPassage] = useState(false) // vente de passage (one-shot)
+  const [aCredit, setACredit] = useState(false)         // vente à crédit (clients réguliers)
 
   const bpc = boisson?.bouteillesParCasier || 12
+  // L'attribution client n'existe qu'en mode Supabase, et seulement pour les VENTES
+  const clientsActifs = !!adapter.clientsActifs
 
   // Réinitialise tout le parcours
   const recommencer = () => {
@@ -55,6 +61,9 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
     setQuantite(1)
     setMontant(0)
     setHistoCoupures([])
+    setClient(null)
+    setClientPassage(false)
+    setACredit(false)
     setCasseMode(false)
     setCommandeMode(false)
     setEtape('selection')
@@ -83,8 +92,18 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
 
   // Enregistre le mouvement via l'adaptateur puis confirme
   const enregistrer = async () => {
-    await adapter.ajouterMouvement({ boissonId: boisson.id, type, quantite, montant, unite })
+    await adapter.ajouterMouvement({
+      boissonId: boisson.id, type, quantite, montant, unite,
+      clientId: client?.id || null, clientPassage, aCredit,
+    })
     setTimeout(recommencer, 400)
+  }
+
+  // Étape après le montant : pour une VENTE en mode cloud → choix du client
+  const apresMontant = () => {
+    clic()
+    if (type === 'sortie' && clientsActifs) setEtape('client')
+    else setEtape('recap')
   }
 
   // Prix suggéré = prix/bouteille × (nb de bouteilles) — tient compte de l'unité
@@ -100,7 +119,12 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
     if (etape === 'unite') return setEtape('sens')
     if (etape === 'quantite') return setEtape('unite')
     if (etape === 'montant') return setEtape('quantite')
-    if (etape === 'recap') return setEtape('montant')
+    if (etape === 'client') return setEtape('montant')
+    if (etape === 'paiement') return setEtape('client')
+    if (etape === 'recap') {
+      if (type !== 'sortie' || !clientsActifs) return setEtape('montant')
+      return setEtape(client ? 'paiement' : 'client') // client régulier → paiement ; passage → client
+    }
   }
 
   // ----- Sous-flux CASSÉ -----------------------------------------------------
@@ -291,13 +315,47 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
             </div>
             <div className="p-3">
               <button
-                onClick={() => {
-                  clic()
-                  setEtape('recap')
-                }}
+                onClick={apresMontant}
                 className="btn-tactile bg-sky-600 active:bg-sky-700 text-white w-full h-20 text-4xl flex-row gap-3"
               >
-                ➡️ ✓
+                ➡️ {type === 'sortie' && clientsActifs ? '👥' : '✓'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Étape CLIENT (ventes en mode cloud) : passage ou client régulier */}
+        {etape === 'client' && (
+          <SelectionClient
+            adapter={adapter}
+            onPassage={() => { setClient(null); setClientPassage(true); setACredit(false); setEtape('recap') }}
+            onChoisir={(c) => { setClient(c); setClientPassage(false); setEtape('paiement') }}
+          />
+        )}
+
+        {/* Étape PAIEMENT : cash ou crédit (clients réguliers uniquement) */}
+        {etape === 'paiement' && (
+          <div className="h-full flex flex-col">
+            <div className="bg-slate-800 text-white text-center py-2 text-xl font-black flex items-center justify-center gap-2">
+              {client?.photo
+                ? <img src={client.photo} alt="" className="w-9 h-9 rounded-full object-cover" />
+                : <span className="w-9 h-9 rounded-full bg-indigo-500 flex items-center justify-center">{(client?.nom || '?').trim().charAt(0).toUpperCase()}</span>}
+              {client?.nom || 'Client'}
+            </div>
+            <div className="flex-1 grid grid-rows-2 gap-4 p-4">
+              <button
+                onClick={() => { clic(); parler('Payé cash'); setACredit(false); setEtape('recap') }}
+                className="btn-tactile bg-emerald-600 active:bg-emerald-700 text-white gap-2"
+              >
+                <span className="text-8xl">💵</span>
+                <span className="text-4xl font-black">PAYÉ CASH</span>
+              </button>
+              <button
+                onClick={() => { clic(); parler('À crédit'); setACredit(true); setEtape('recap') }}
+                className="btn-tactile bg-orange-600 active:bg-orange-700 text-white gap-2"
+              >
+                <span className="text-8xl">📋</span>
+                <span className="text-4xl font-black">À CRÉDIT</span>
               </button>
             </div>
           </div>
@@ -311,6 +369,9 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
             unite={unite}
             bouteillesParCasier={bpc}
             montant={montant}
+            client={client}
+            clientPassage={clientPassage}
+            aCredit={aCredit}
             onValider={enregistrer}
             onAnnuler={recommencer}
           />

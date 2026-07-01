@@ -19,6 +19,9 @@ export default function RecapVisuel({
   unite = 'bouteille',
   bouteillesParCasier = 12,
   montant,
+  client = null,
+  clientPassage = false,
+  aCredit = false,
   onValider,
   onAnnuler,
 }) {
@@ -34,10 +37,14 @@ export default function RecapVisuel({
 
   const valider = () => {
     succes()
-    // Confirmation vocale complète (avec l'unité et le montant, achat ou vente)
+    // Confirmation vocale complète (avec l'unité, le montant et le client)
     const argent = montant > 0 ? `, ${montantEnVoix(montant)}` : ''
+    const qui = !estEntree
+      ? (client?.nom ? `, pour ${client.nom}` : (clientPassage ? ', client de passage' : ''))
+      : ''
+    const credit = !estEntree && client && aCredit ? ', à crédit' : ''
     parler(
-      `${estEntree ? 'Entrée' : 'Sortie'}, ${boisson?.nom}, ${quantite} ${motUnite}${argent}. Validé`
+      `${estEntree ? 'Entrée' : 'Sortie'}, ${boisson?.nom}, ${quantite} ${motUnite}${argent}${qui}${credit}. Validé`
     )
     onValider()
   }
@@ -63,6 +70,27 @@ export default function RecapVisuel({
       </div>
 
       <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col items-center gap-3">
+        {/* Client (ventes seulement) : photo/initiale + nom, ou « passage » */}
+        {!estEntree && (client || clientPassage) && (
+          <div className="bg-indigo-800 rounded-full pl-1 pr-4 py-1 flex items-center gap-2">
+            {client?.photo
+              ? <img src={client.photo} alt="" className="w-10 h-10 rounded-full object-cover" />
+              : <span className="w-10 h-10 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xl">
+                  {client ? (client.nom || '?').trim().charAt(0).toUpperCase() : '🚶'}
+                </span>}
+            <span className="text-white text-xl font-black">
+              {client ? (client.nom || 'Client') : 'Client de passage'}
+            </span>
+          </div>
+        )}
+
+        {/* Mode de paiement (vente à un client régulier) */}
+        {!estEntree && client && (
+          <div className={`rounded-full px-4 py-1 text-lg font-black ${aCredit ? 'bg-orange-600 text-white' : 'bg-emerald-600 text-white'}`}>
+            {aCredit ? '📋 À CRÉDIT' : '💵 PAYÉ CASH'}
+          </div>
+        )}
+
         {/* Boisson + quantité en chiffre + unité */}
         <div className="flex items-center gap-3">
           <PhotoBoisson boisson={boisson} taille={90} />

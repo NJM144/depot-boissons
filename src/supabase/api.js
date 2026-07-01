@@ -47,6 +47,7 @@ export async function ajouterBoisson(depotId, b) {
     prix_vente: Number(b.prixVente) || 0,
     bouteilles_par_casier: Number(b.bouteillesParCasier) || 12,
     seuil_alerte: Number(b.seuilAlerte) || 5,
+    actionnaire_reserve_id: b.actionnaireReserveId || null,
   })
   if (error) throw error
 }
@@ -63,6 +64,7 @@ export async function modifierBoisson(id, champs) {
       prix_vente: Number(champs.prixVente) || 0,
       bouteilles_par_casier: Number(champs.bouteillesParCasier) || 12,
       seuil_alerte: Number(champs.seuilAlerte) || 0,
+      actionnaire_reserve_id: champs.actionnaireReserveId || null,
     })
     .eq('id', id)
   if (error) throw error
@@ -88,6 +90,7 @@ function normaliserBoisson(r) {
     prixReference: (Number(r.prix_vente) || 0) / (r.bouteilles_par_casier || 12),
     bouteillesParCasier: r.bouteilles_par_casier || 12,
     seuilAlerte: r.seuil_alerte,
+    actionnaireReserveId: r.actionnaire_reserve_id || null,  // bénéfice réservé à un actionnaire
     actif: r.actif,
   }
 }
@@ -100,7 +103,7 @@ function normaliserBoisson(r) {
 //  - montant : total EXACT composé au clavier monétaire (pour les sorties)
 //  - unite   : 'bouteille' | 'casier' (le trigger convertit en bouteilles)
 //  La ligne est créée avec statut 'en_attente' (défaut SQL) : le patron validera.
-export async function ajouterMouvement({ depotId, boissonId, type, quantite, montant, unite, gerantId }) {
+export async function ajouterMouvement({ depotId, boissonId, type, quantite, montant, unite, gerantId, clientId, clientPassage, aCredit }) {
   // Montant EXACT (pas d'arrondi) ; le trigger calcule la marge.
   //  - sortie  : argent reçu (0 si non saisi)
   //  - entrée  : prix d'achat payé ; null => le trigger retombe sur le prix
@@ -115,6 +118,11 @@ export async function ajouterMouvement({ depotId, boissonId, type, quantite, mon
     unite: unite || 'bouteille',
     montant_total: montantTotal,
     gerant_id: gerantId || null,
+    // Attribution client (ventes uniquement) : client régulier OU passage
+    client_id: type === 'sortie' ? clientId || null : null,
+    client_passage: type === 'sortie' ? !!clientPassage : false,
+    // Crédit : possible seulement pour une vente à un client régulier
+    a_credit: type === 'sortie' && clientId ? !!aCredit : false,
   })
   if (error) throw error
 }
@@ -159,14 +167,16 @@ export async function ajouterCasse({ depotId, boissonId, quantite, unite, gerant
 // Liste TOUT ce qui est en attente de validation (ventes, réceptions, casses),
 // enrichi du nom de la boisson, trié du plus récent au plus ancien.
 export async function listerEnAttente(depotId) {
-  const [mvts, casses, boissons] = await Promise.all([
+  const [mvts, casses, boissons, clients] = await Promise.all([
     supabase.from('mouvements').select('*').eq('depot_id', depotId).eq('statut', 'en_attente'),
     supabase.from('casses').select('*').eq('depot_id', depotId).eq('statut', 'en_attente'),
     supabase.from('boissons').select('id, nom, emoji'),
+    supabase.from('clients').select('id, nom, photo'),
   ])
   if (mvts.error) throw mvts.error
   if (casses.error) throw casses.error
   const parId = new Map((boissons.data || []).map((b) => [b.id, b]))
+  const clientParId = new Map((clients.data || []).map((c) => [c.id, c]))
 
   const lignes = [
     ...(mvts.data || []).map((m) => ({
@@ -179,6 +189,9 @@ export async function listerEnAttente(depotId) {
       montant: m.montant_total,
       created_at: m.created_at,
       boisson: parId.get(m.boisson_id),
+      client: m.client_id ? clientParId.get(m.client_id) : null,
+      clientPassage: !!m.client_passage,
+      aCredit: !!m.a_credit,
     })),
     ...(casses.data || []).map((c) => ({
       kind: 'casse',
@@ -268,6 +281,125 @@ export async function calculerStocks(depotId) {
     enRupture: r.en_rupture,
     actif: true,
   }))
+}
+
+// ----------------------------------------------------------------------------
+//  CLIENTS — réguliers (ajoutés par le gérant à la voix + photo) & ventes
+// ----------------------------------------------------------------------------
+
+// Liste les clients réguliers actifs du dépôt (gérant ET patron via RLS).
+//  format app : { id, nom, photo, telephone }
+export async function listerClients(depotId) {
+  const { data, error } = await supabase
+    .from('clients')
+    .select('id, nom, photo, telephone, created_at')
+    .eq('depot_id', depotId)
+    .eq('actif', true)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+// Ajoute un client régulier. Le gérant passe gerantId (created_by).
+export async function ajouterClient(depotId, { nom, photo, telephone } = {}, gerantId = null) {
+  const { data, error } = await supabase
+    .from('clients')
+    .insert({
+      depot_id: depotId,
+      nom: (nom || '').trim() || null,
+      photo: photo || null,
+      telephone: (telephone || '').trim() || null,
+      created_by: gerantId || null,
+    })
+    .select('id, nom, photo, telephone')
+  if (error) throw error
+  return data?.[0] || null
+}
+
+// Modifie un client (patron : renommer, changer photo/tél).
+export async function modifierClient(id, champs = {}) {
+  const maj = {}
+  if (champs.nom !== undefined) maj.nom = (champs.nom || '').trim() || null
+  if (champs.photo !== undefined) maj.photo = champs.photo || null
+  if (champs.telephone !== undefined) maj.telephone = (champs.telephone || '').trim() || null
+  const { error } = await supabase.from('clients').update(maj).eq('id', id)
+  if (error) throw error
+}
+
+// Désactive un client (soft delete — patron).
+export async function supprimerClient(id) {
+  const { error } = await supabase.from('clients').update({ actif: false }).eq('id', id)
+  if (error) throw error
+}
+
+// Patron : ventes agrégées par client sur une plage de dates ('AAAA-MM-JJ').
+//  Inclut la dette (credit_du) de chaque client + le total des crédits.
+export async function getVentesParClient(depotId, debut, fin) {
+  const { data, error } = await supabase.rpc('get_ventes_par_client', {
+    p_depot_id: depotId, p_debut: debut, p_fin: fin,
+  })
+  if (error) throw error
+  return data
+}
+
+// Patron : détail des ventes à crédit NON réglées d'un client.
+export async function getCreditsClient(clientId) {
+  const { data, error } = await supabase.rpc('get_credits_client', { p_client_id: clientId })
+  if (error) throw error
+  return data || []
+}
+
+// Patron : encaisser (solder) TOUT le crédit d'un client.
+export async function encaisserCreditClient(depotId, clientId) {
+  const { error } = await supabase
+    .from('mouvements')
+    .update({ credit_regle: true, credit_regle_at: new Date().toISOString() })
+    .eq('depot_id', depotId)
+    .eq('client_id', clientId)
+    .eq('type', 'sortie')
+    .eq('statut', 'valide')
+    .eq('a_credit', true)
+    .eq('credit_regle', false)
+  if (error) throw error
+}
+
+// Patron : encaisser une vente à crédit précise.
+export async function encaisserCreditVente(mouvementId) {
+  const { error } = await supabase
+    .from('mouvements')
+    .update({ credit_regle: true, credit_regle_at: new Date().toISOString() })
+    .eq('id', mouvementId)
+  if (error) throw error
+}
+
+// ----------------------------------------------------------------------------
+//  CORRECTION / AJUSTEMENT DU STOCK (PROPRIÉTAIRE)
+// ----------------------------------------------------------------------------
+
+// Corrige le stock d'une boisson : le patron saisit le stock RÉEL compté
+// (en bouteilles) ; la RPC calcule l'écart et enregistre un ajustement
+// d'inventaire (sans toucher au CA ni aux marges). Renvoie { delta, ... }.
+export async function corrigerStock(boissonId, stockCibleBouteilles, motif) {
+  const { data, error } = await supabase.rpc('corriger_stock', {
+    p_boisson_id: boissonId,
+    p_stock_cible: Math.max(0, Math.round(Number(stockCibleBouteilles) || 0)),
+    p_motif: motif || null,
+  })
+  if (error) throw error
+  return data
+}
+
+// Historique des ajustements d'inventaire (tous, ou pour une boisson)
+export async function listerAjustements(depotId, boissonId = null) {
+  let q = supabase
+    .from('ajustements_stock')
+    .select('*')
+    .eq('depot_id', depotId)
+    .order('created_at', { ascending: false })
+  if (boissonId) q = q.eq('boisson_id', boissonId)
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
 }
 
 // ----------------------------------------------------------------------------
@@ -393,11 +525,12 @@ export async function listerCharges(actionnaireId, mois) {
   return data || []
 }
 export async function ajouterCharge(depotId, actionnaireId, { libelle, montant, mois }) {
-  const { error } = await supabase.from('charges_actionnaire').insert({
+  const { data, error } = await supabase.from('charges_actionnaire').insert({
     depot_id: depotId, actionnaire_id: actionnaireId,
     libelle, montant: Number(montant) || 0, mois,
-  })
+  }).select()
   if (error) throw error
+  return data?.[0] || null
 }
 export async function supprimerCharge(id) {
   const { error } = await supabase.from('charges_actionnaire').delete().eq('id', id)

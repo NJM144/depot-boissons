@@ -10,8 +10,11 @@ import * as Local from '../db/database.js'
 import * as Cloud from '../supabase/api.js'
 
 // --- Adaptateur LOCAL (Dexie / IndexedDB) -----------------------------------
+//  Le mode local est une démo : pas de gestion de clients (clientsActifs=false),
+//  l'étape « client » du parcours gérant est donc masquée.
 export const adapterLocal = {
   mode: 'local',
+  clientsActifs: false,
   listerBoissons: () => Local.listerBoissons(),
   // En local on ne gère pas l'unité (mode démo) : on stocke la quantité telle quelle
   ajouterMouvement: ({ boissonId, type, quantite, montant }) =>
@@ -26,11 +29,15 @@ export const adapterLocal = {
 export function adapterSupabase({ depotId, gerantId }) {
   return {
     mode: 'supabase',
+    clientsActifs: true,
     listerBoissons: () => Cloud.listerBoissonsGerant(),
-    ajouterMouvement: ({ boissonId, type, quantite, montant, unite }) =>
-      Cloud.ajouterMouvement({ depotId, boissonId, type, quantite, montant, unite, gerantId }),
+    ajouterMouvement: ({ boissonId, type, quantite, montant, unite, clientId, clientPassage, aCredit }) =>
+      Cloud.ajouterMouvement({ depotId, boissonId, type, quantite, montant, unite, gerantId, clientId, clientPassage, aCredit }),
     ajouterCasse: ({ boissonId, quantite, unite }) =>
       Cloud.ajouterCasse({ depotId, boissonId, quantite, unite, gerantId }),
     calculerStocks: () => Cloud.calculerStocks(depotId),
+    // Clients (mode Supabase uniquement)
+    listerClients: () => Cloud.listerClients(depotId),
+    ajouterClient: ({ nom, photo, telephone }) => Cloud.ajouterClient(depotId, { nom, photo, telephone }, gerantId),
   }
 }
