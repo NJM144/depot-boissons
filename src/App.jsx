@@ -9,7 +9,14 @@
 import { supabaseConfigure } from './supabase/client.js'
 import AppLocal from './AppLocal.jsx'
 import AppSupabase from './AppSupabase.jsx'
+import MiseAJour from './components/commun/MiseAJour.jsx'
 
 export default function App() {
-  return supabaseConfigure ? <AppSupabase /> : <AppLocal />
+  return (
+    <>
+      {/* Vérifie la dispo d'une nouvelle version (toutes les 10 ouvertures, APK only) */}
+      <MiseAJour />
+      {supabaseConfigure ? <AppSupabase /> : <AppLocal />}
+    </>
+  )
 }

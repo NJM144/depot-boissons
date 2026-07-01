@@ -1,7 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 // Configuration TailwindCSS
 export default {
-  content: ['./index.html', './src/**/*.{js,jsx}'],
+  content: ['./index.html', './actionnaire.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
       // Couleurs sémantiques de l'application
