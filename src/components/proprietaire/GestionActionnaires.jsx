@@ -23,6 +23,7 @@ export default function GestionActionnaires({ depotId }) {
   const [edition, setEdition] = useState(null)   // actionnaire en édition (modal)
   const [chargesDe, setChargesDe] = useState(null) // actionnaire dont on gère les charges
   const [chargesDepotOuvert, setChargesDepotOuvert] = useState(false) // modal charges réelles du dépôt
+  const [amortissementsOuvert, setAmortissementsOuvert] = useState(false) // modal amortissements (tricycle...)
 
   const charger = useCallback(async () => {
     const d = await Cloud.getBeneficesActionnaires(depotId, mois + '-01')
@@ -75,6 +76,15 @@ export default function GestionActionnaires({ depotId }) {
           <p className="text-xs text-slate-500">Total {mois.slice(0, 7)} : <b>{formaterFCFA(data.charges_depot_total)}</b></p>
         </div>
         <button onClick={() => setChargesDepotOuvert(true)} className="bg-amber-600 text-white rounded-lg px-3 py-1.5 text-sm font-semibold">✏️ Gérer</button>
+      </div>
+
+      {/* Amortissements (épargne quotidienne déclarée par le gérant, ex : tricycle) */}
+      <div className="bg-white rounded-xl p-3 mb-3 shadow-sm flex items-center justify-between">
+        <div>
+          <h3 className="font-bold text-slate-700">🔧 Amortissements</h3>
+          <p className="text-xs text-slate-500">Versements quotidiens déclarés par le gérant (ex : tricycle)</p>
+        </div>
+        <button onClick={() => setAmortissementsOuvert(true)} className="bg-indigo-600 text-white rounded-lg px-3 py-1.5 text-sm font-semibold">✏️ Gérer</button>
       </div>
 
       {/* Liste des actionnaires */}
@@ -135,6 +145,10 @@ export default function GestionActionnaires({ depotId }) {
       {chargesDepotOuvert && (
         <ModalChargesDepot depotId={depotId} mois={mois + '-01'}
           onFerme={() => { setChargesDepotOuvert(false); charger() }} />
+      )}
+      {amortissementsOuvert && (
+        <ModalAmortissements depotId={depotId}
+          onFerme={() => { setAmortissementsOuvert(false); charger() }} />
       )}
     </div>
   )
@@ -357,6 +371,120 @@ function ModalChargesDepot({ depotId, mois, onFerme }) {
         ))}
         {charges.length === 0 && <p className="text-slate-400 text-sm py-2 text-center">Aucune charge ce mois.</p>}
         <p className="text-right font-bold mt-2">Total : {formaterFCFA(total)}</p>
+      </div>
+    </div>
+  )
+}
+
+// ----- Modal AMORTISSEMENTS (lignes d'épargne quotidienne, ex : tricycle) -----
+//  Le gérant déclare le versement du jour depuis son écran ; ici le patron
+//  définit/active/désactive les lignes (libellé + montant/jour suggéré).
+function ModalAmortissements({ depotId, onFerme }) {
+  const [lignes, setLignes] = useState(null)
+  const [libelle, setLibelle] = useState('')
+  const [montantJour, setMontantJour] = useState('')
+  const [dateDebut, setDateDebut] = useState(() => new Date().toISOString().slice(0, 10))
+  const [err, setErr] = useState(null)
+  const [enCours, setEnCours] = useState(false)
+
+  const recharger = useCallback(
+    () =>
+      Cloud.listerAmortissements(depotId)
+        .then(setLignes)
+        .catch((e) => {
+          console.error('listerAmortissements', e)
+          setErr('Lecture des amortissements impossible : ' + (e.message || e.code || 'erreur'))
+        }),
+    [depotId],
+  )
+  useEffect(() => { recharger() }, [recharger])
+
+  const ajouter = async () => {
+    setErr(null)
+    if (!libelle.trim()) return setErr('Écris un libellé (ex : tricycle).')
+    const montantNum = Number(String(montantJour).replace(/\s/g, '').replace(',', '.'))
+    if (!(montantNum > 0)) return setErr('Entre un montant/jour valide.')
+    setEnCours(true)
+    try {
+      await Cloud.ajouterAmortissement(depotId, { libelle: libelle.trim(), montantJour: montantNum, dateDebut })
+      setLibelle(''); setMontantJour('')
+      await recharger()
+    } catch (e) {
+      console.error('ajouterAmortissement', e)
+      setErr(e.message || e.hint || e.code || 'Erreur lors de l’ajout.')
+    } finally {
+      setEnCours(false)
+    }
+  }
+
+  const basculerActif = async (l) => {
+    try {
+      await Cloud.modifierAmortissement(l.id, { actif: !l.actif })
+      recharger()
+    } catch (e) {
+      console.error('modifierAmortissement', e)
+      setErr(e.message || 'Erreur')
+    }
+  }
+
+  const supprimer = async (l) => {
+    if (!confirm(`Supprimer « ${l.libelle} » ?`)) return
+    try {
+      await Cloud.supprimerAmortissement(l.id)
+      recharger()
+    } catch (e) {
+      console.error('supprimerAmortissement', e)
+      setErr(e.message || 'Erreur')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+      <div className="bg-white w-full rounded-t-3xl p-4 max-h-[90%] overflow-y-auto no-scrollbar">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-lg font-bold">🔧 Amortissements</h3>
+          <button onClick={onFerme} className="bg-slate-200 rounded-lg px-3 py-1 text-sm font-semibold">Fermer ✕</button>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">
+          Seule la ligne ACTIVE la plus ancienne est proposée au gérant sur son écran de déclaration. Désactive une ligne (au lieu de la supprimer) pour garder son historique de versements.
+        </p>
+
+        <div className="bg-slate-50 rounded-xl p-3 mb-3">
+          <label className="block text-xs font-semibold mb-1">Libellé</label>
+          <input value={libelle} onChange={(e) => setLibelle(e.target.value)}
+            className="border rounded-lg p-2 w-full mb-2" placeholder="Ex : tricycle" />
+          <label className="block text-xs font-semibold mb-1">Montant / jour (FCFA)</label>
+          <input type="number" inputMode="numeric" value={montantJour} onChange={(e) => setMontantJour(e.target.value)}
+            className="border rounded-lg p-2 w-full mb-2" placeholder="Ex : 5000" />
+          <label className="block text-xs font-semibold mb-1">Date de début</label>
+          <input type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)}
+            className="border rounded-lg p-2 w-full mb-2" />
+          {err && <p className="text-red-600 text-sm font-semibold mb-2">{err}</p>}
+          <button onClick={ajouter} disabled={enCours}
+            className="w-full bg-indigo-600 active:bg-indigo-700 disabled:opacity-50 text-white rounded-lg py-3 font-bold">
+            {enCours ? 'Ajout…' : '➕ Ajouter la ligne'}
+          </button>
+        </div>
+
+        {lignes === null && <p className="text-slate-400 text-sm py-2 text-center">Chargement…</p>}
+        {lignes?.map((l) => (
+          <div key={l.id} className="flex items-center justify-between border-b py-2 text-sm gap-2">
+            <div className="min-w-0">
+              <p className="font-semibold truncate">
+                {l.libelle} {!l.actif && <span className="text-xs text-slate-400">(inactif)</span>}
+              </p>
+              <p className="text-xs text-slate-500">{formaterFCFA(l.montant_jour)} / jour · depuis le {l.date_debut}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={() => basculerActif(l)}
+                className={`rounded-lg px-2 py-1 text-xs font-semibold ${l.actif ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                {l.actif ? 'Désactiver' : 'Activer'}
+              </button>
+              <button onClick={() => supprimer(l)} className="text-red-500 text-lg">🗑️</button>
+            </div>
+          </div>
+        ))}
+        {lignes?.length === 0 && <p className="text-slate-400 text-sm py-2 text-center">Aucun amortissement configuré.</p>}
       </div>
     </div>
   )
