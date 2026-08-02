@@ -30,6 +30,7 @@ export function adapterSupabase({ depotId, gerantId }) {
   return {
     mode: 'supabase',
     clientsActifs: true,
+    amortissementActif: true,
     listerBoissons: () => Cloud.listerBoissonsGerant(),
     ajouterMouvement: ({ boissonId, type, quantite, montant, unite, clientId, clientPassage, aCredit }) =>
       Cloud.ajouterMouvement({ depotId, boissonId, type, quantite, montant, unite, gerantId, clientId, clientPassage, aCredit }),
@@ -39,5 +40,9 @@ export function adapterSupabase({ depotId, gerantId }) {
     // Clients (mode Supabase uniquement)
     listerClients: () => Cloud.listerClients(depotId),
     ajouterClient: ({ nom, photo, telephone }) => Cloud.ajouterClient(depotId, { nom, photo, telephone }, gerantId),
+    // Amortissement (mode Supabase uniquement) : versement quotidien déclaré par le gérant
+    listerAmortissementsActifs: () => Cloud.listerAmortissementsActifs(depotId),
+    ajouterDeclarationAmortissement: ({ amortissementId, montant }) =>
+      Cloud.ajouterDeclarationAmortissement({ depotId, amortissementId, montant, gerantId }),
   }
 }

@@ -22,6 +22,7 @@ import ClavierMonetaire from './ClavierMonetaire.jsx'
 import RecapVisuel from './RecapVisuel.jsx'
 import BoissonCassee from './BoissonCassee.jsx'
 import CommandeCalculatrice from './CommandeCalculatrice.jsx'
+import DeclarationAmortissement from './DeclarationAmortissement.jsx'
 import SelectionClient from './SelectionClient.jsx'
 import PhotoBoisson from '../commun/PhotoBoisson.jsx'
 
@@ -39,6 +40,7 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
   const [etape, setEtape] = useState('selection')
   const [casseMode, setCasseMode] = useState(false)
   const [commandeMode, setCommandeMode] = useState(false)
+  const [amortissementMode, setAmortissementMode] = useState(false)
   const [boisson, setBoisson] = useState(null)
   const [type, setType] = useState(null) // 'entree' | 'sortie'
   const [unite, setUnite] = useState('bouteille') // 'bouteille' | 'casier'
@@ -66,6 +68,7 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
     setACredit(false)
     setCasseMode(false)
     setCommandeMode(false)
+    setAmortissementMode(false)
     setEtape('selection')
   }
 
@@ -146,6 +149,25 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
     )
   }
 
+  // ----- Sous-flux AMORTISSEMENT (versement quotidien, ex : tricycle) --------
+  if (amortissementMode) {
+    return (
+      <div className="h-full flex flex-col bg-slate-900">
+        <div className="flex items-center gap-2 p-2 bg-slate-800">
+          <button
+            onClick={recommencer}
+            className="btn-tactile bg-slate-600 active:bg-slate-700 text-white w-16 h-14 text-3xl"
+          >
+            ⬅️
+          </button>
+        </div>
+        <div className="flex-1 min-h-0">
+          <DeclarationAmortissement adapter={adapter} onTermine={recommencer} />
+        </div>
+      </div>
+    )
+  }
+
   // ----- Sous-flux COMMANDE (calculatrice de réappro) ------------------------
   if (commandeMode) {
     return (
@@ -208,6 +230,17 @@ export default function GerantApp({ onQuitter, adapter = adapterLocal }) {
             >
               🥃💥
             </button>
+            {adapter.amortissementActif && (
+              <button
+                onClick={() => {
+                  clic()
+                  setAmortissementMode(true)
+                }}
+                className="btn-tactile bg-indigo-600 active:bg-indigo-700 text-white w-20 h-14 text-3xl"
+              >
+                🔧
+              </button>
+            )}
           </>
         )}
       </div>

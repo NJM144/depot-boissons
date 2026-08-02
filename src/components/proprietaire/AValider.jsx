@@ -17,6 +17,7 @@ const ASPECT = {
   sortie: { libelle: 'VENTE', ico: '⬆️🔴', couleur: 'border-red-400' },
   entree: { libelle: 'RÉCEPTION', ico: '⬇️🟢', couleur: 'border-green-400' },
   casse: { libelle: 'CASSE', ico: '🥃💥', couleur: 'border-amber-400' },
+  amortissement: { libelle: 'AMORTISSEMENT', ico: '🔧', couleur: 'border-indigo-400' },
 }
 
 export default function AValider({ depotId, onMajCompteur }) {
@@ -50,6 +51,8 @@ export default function AValider({ depotId, onMajCompteur }) {
       clic()
       if (l.kind === 'casse') {
         await Cloud.validerCasse(l.id, { quantite: l.quantite })
+      } else if (l.kind === 'amortissement') {
+        await Cloud.validerDeclarationAmortissement(l.id, { montant: l.montant })
       } else {
         // Vente (argent reçu) ou réception (prix d'achat) : montant corrigeable.
         // Pour la réception, ce prix unitaire devient le prix d'achat catalogue.
@@ -73,6 +76,7 @@ export default function AValider({ depotId, onMajCompteur }) {
     try {
       erreur()
       if (l.kind === 'casse') await Cloud.rejeterCasse(l.id)
+      else if (l.kind === 'amortissement') await Cloud.rejeterDeclarationAmortissement(l.id)
       else await Cloud.rejeterMouvement(l.id)
       setLignes((ls) => {
         const reste = ls.filter((x) => x.id !== l.id)
@@ -123,10 +127,14 @@ export default function AValider({ depotId, onMajCompteur }) {
                     )}
                   </p>
                   <p className="text-sm text-slate-600 truncate">
-                    {l.boisson?.emoji} {l.boisson?.nom || '(boisson)'}
-                    {l.unite === 'casier' && l.quantiteBouteilles
-                      ? ` — ${l.quantiteBouteilles} 🍾 au total`
-                      : ''}
+                    {l.kind === 'amortissement'
+                      ? l.libelle
+                      : <>
+                          {l.boisson?.emoji} {l.boisson?.nom || '(boisson)'}
+                          {l.unite === 'casier' && l.quantiteBouteilles
+                            ? ` — ${l.quantiteBouteilles} 🍾 au total`
+                            : ''}
+                        </>}
                   </p>
                   {/* Client (ventes attribuées) + mode de paiement */}
                   {l.type === 'sortie' && (l.client || l.clientPassage) && (
@@ -149,20 +157,24 @@ export default function AValider({ depotId, onMajCompteur }) {
 
               {/* Champs corrigeables : quantité (+ montant pour les ventes) */}
               <div className="flex items-end gap-2 mb-2">
-                <label className="flex flex-col text-xs text-slate-500">
-                  {l.unite === 'casier' ? 'Casiers' : 'Quantité'}
-                  <input
-                    type="number"
-                    value={l.quantite}
-                    onChange={(e) => editer(l.id, 'quantite', e.target.value)}
-                    className="border rounded-lg p-2 w-20 text-lg font-bold"
-                  />
-                </label>
-                {(l.type === 'sortie' || l.type === 'entree') && (
+                {l.kind !== 'amortissement' && (
+                  <label className="flex flex-col text-xs text-slate-500">
+                    {l.unite === 'casier' ? 'Casiers' : 'Quantité'}
+                    <input
+                      type="number"
+                      value={l.quantite}
+                      onChange={(e) => editer(l.id, 'quantite', e.target.value)}
+                      className="border rounded-lg p-2 w-20 text-lg font-bold"
+                    />
+                  </label>
+                )}
+                {(l.type === 'sortie' || l.type === 'entree' || l.kind === 'amortissement') && (
                   <label className="flex flex-col text-xs text-slate-500 flex-1">
                     {l.type === 'sortie'
                       ? 'Montant reçu (FCFA) — corrigeable'
-                      : "Prix d'achat (FCFA) — corrigeable"}
+                      : l.kind === 'amortissement'
+                        ? 'Montant versé (FCFA) — corrigeable'
+                        : "Prix d'achat (FCFA) — corrigeable"}
                     <input
                       type="number"
                       value={l.montant ?? ''}
