@@ -1,6 +1,6 @@
 {
   "name": "depot-boissons",
-  "version": "1.0.18",
+  "version": "1.0.21",
   "description": "Application mobile de gestion d'un dépôt de boissons (profil gérant analphabète + profil propriétaire)",
   "private": true,
   "type": "module",

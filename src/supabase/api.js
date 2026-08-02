@@ -161,20 +161,46 @@ export async function ajouterCasse({ depotId, boissonId, quantite, unite, gerant
 }
 
 // ----------------------------------------------------------------------------
-//  VALIDATION PAR LE PATRON (mouvements + casses en attente)
+//  AMORTISSEMENT — déclaration quotidienne du gérant (ex : 5000 XOF/j tricycle)
 // ----------------------------------------------------------------------------
 
-// Liste TOUT ce qui est en attente de validation (ventes, réceptions, casses),
-// enrichi du nom de la boisson, trié du plus récent au plus ancien.
+// Amortissements actifs du dépôt (pour pré-remplir le montant suggéré)
+export async function listerAmortissementsActifs(depotId) {
+  const { data, error } = await supabase
+    .from('amortissements').select('*').eq('depot_id', depotId).eq('actif', true).order('created_at')
+  if (error) throw error
+  return data || []
+}
+
+// Déclare un versement du jour (statut 'en_attente' par défaut) : le patron validera.
+export async function ajouterDeclarationAmortissement({ depotId, amortissementId, montant, gerantId }) {
+  const { error } = await supabase.from('declarations_amortissement').insert({
+    depot_id: depotId,
+    amortissement_id: amortissementId || null,
+    montant: Number(montant) || 0,
+    gerant_id: gerantId || null,
+  })
+  if (error) throw error
+}
+
+// ----------------------------------------------------------------------------
+//  VALIDATION PAR LE PATRON (mouvements + casses + déclarations d'amortissement)
+// ----------------------------------------------------------------------------
+
+// Liste TOUT ce qui est en attente de validation (ventes, réceptions, casses,
+// versements d'amortissement), enrichi du nom de la boisson, trié du plus
+// récent au plus ancien.
 export async function listerEnAttente(depotId) {
-  const [mvts, casses, boissons, clients] = await Promise.all([
+  const [mvts, casses, decls, boissons, clients] = await Promise.all([
     supabase.from('mouvements').select('*').eq('depot_id', depotId).eq('statut', 'en_attente'),
     supabase.from('casses').select('*').eq('depot_id', depotId).eq('statut', 'en_attente'),
+    supabase.from('declarations_amortissement').select('*, amortissements(libelle)').eq('depot_id', depotId).eq('statut', 'en_attente'),
     supabase.from('boissons').select('id, nom, emoji'),
     supabase.from('clients').select('id, nom, photo'),
   ])
   if (mvts.error) throw mvts.error
   if (casses.error) throw casses.error
+  if (decls.error) throw decls.error
   const parId = new Map((boissons.data || []).map((b) => [b.id, b]))
   const clientParId = new Map((clients.data || []).map((c) => [c.id, c]))
 
@@ -204,19 +230,42 @@ export async function listerEnAttente(depotId) {
       created_at: c.created_at,
       boisson: parId.get(c.boisson_id),
     })),
+    ...(decls.data || []).map((d) => ({
+      kind: 'amortissement',
+      id: d.id,
+      type: 'amortissement',
+      montant: d.montant,
+      created_at: d.created_at,
+      libelle: d.amortissements?.libelle || 'Amortissement',
+    })),
   ]
   return lignes.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 }
 
 // Nombre d'éléments en attente (pour le badge de l'onglet)
 export async function compterEnAttente(depotId) {
-  const [m, c] = await Promise.all([
+  const [m, c, d] = await Promise.all([
     supabase.from('mouvements').select('id', { count: 'exact', head: true })
       .eq('depot_id', depotId).eq('statut', 'en_attente'),
     supabase.from('casses').select('id', { count: 'exact', head: true })
       .eq('depot_id', depotId).eq('statut', 'en_attente'),
+    supabase.from('declarations_amortissement').select('id', { count: 'exact', head: true })
+      .eq('depot_id', depotId).eq('statut', 'en_attente'),
   ])
-  return (m.count || 0) + (c.count || 0)
+  return (m.count || 0) + (c.count || 0) + (d.count || 0)
+}
+
+// Valide / rejette une déclaration d'amortissement (correction éventuelle du montant)
+export async function validerDeclarationAmortissement(id, { montant } = {}) {
+  const maj = { statut: 'valide' }
+  if (montant != null) maj.montant = Number(montant)
+  const { error } = await supabase.from('declarations_amortissement').update(maj).eq('id', id)
+  if (error) throw error
+}
+
+export async function rejeterDeclarationAmortissement(id) {
+  const { error } = await supabase.from('declarations_amortissement').update({ statut: 'rejete' }).eq('id', id)
+  if (error) throw error
 }
 
 // Valide un mouvement (avec correction éventuelle du montant / de la quantité)
@@ -259,6 +308,7 @@ export function abonnerChangements(depotId, onChange) {
     .channel(`changements-${depotId}-${++_seqCanal}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'mouvements', filter: `depot_id=eq.${depotId}` }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'casses', filter: `depot_id=eq.${depotId}` }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'declarations_amortissement', filter: `depot_id=eq.${depotId}` }, onChange)
     .subscribe()
   return () => supabase.removeChannel(canal)
 }
@@ -438,6 +488,19 @@ export async function getPointIntervalle(depotId, debut, fin) {
   return data
 }
 
+// Mouvements de STOCK (reçu / vendu / cassé / ajustement) par boisson sur une
+// plage de dates libre (du jour debut au jour fin INCLUS). ≠ getPointIntervalle
+// qui ne détaille que les ventes pour le CA/marge.
+export async function mouvementsStockIntervalle(depotId, debut, fin) {
+  const { data, error } = await supabase.rpc('mouvements_stock_intervalle', {
+    p_depot_id: depotId,
+    p_debut: debut,
+    p_fin: fin,
+  })
+  if (error) throw error
+  return data
+}
+
 // Historique JOURNALIER pour la courbe sur une plage (vue v_point_jour filtrée).
 export async function pointHistoriqueIntervalle(depotId, debut, fin) {
   const finExclue = new Date(fin + 'T00:00:00')
@@ -508,6 +571,7 @@ export async function modifierActionnaire(id, champs) {
   if (champs.apport != null) maj.apport = Number(champs.apport) || 0
   if (champs.code != null) maj.code = String(champs.code).trim()
   if (champs.actif != null) maj.actif = !!champs.actif
+  if (champs.chargeResiduelle != null) maj.charge_residuelle = !!champs.chargeResiduelle
   const { error } = await supabase.from('actionnaires').update(maj).eq('id', id)
   if (error) throw error
 }
@@ -534,6 +598,50 @@ export async function ajouterCharge(depotId, actionnaireId, { libelle, montant, 
 }
 export async function supprimerCharge(id) {
   const { error } = await supabase.from('charges_actionnaire').delete().eq('id', id)
+  if (error) throw error
+}
+
+// Charges réelles du dépôt (loyer, salaire, courant/eau, divers...) pour un mois
+export async function listerChargesDepot(depotId, mois) {
+  const { data, error } = await supabase
+    .from('charges_depot').select('*')
+    .eq('depot_id', depotId).eq('mois', mois).order('created_at')
+  if (error) throw error
+  return data || []
+}
+export async function ajouterChargeDepot(depotId, { libelle, montant, mois }) {
+  const { data, error } = await supabase.from('charges_depot').insert({
+    depot_id: depotId, libelle, montant: Number(montant) || 0, mois,
+  }).select()
+  if (error) throw error
+  return data?.[0] || null
+}
+export async function supprimerChargeDepot(id) {
+  const { error } = await supabase.from('charges_depot').delete().eq('id', id)
+  if (error) throw error
+}
+
+// Amortissements (épargne par actionnaire, ex: tricycle 5000 XOF/jour)
+export async function listerAmortissements(depotId) {
+  const { data, error } = await supabase
+    .from('amortissements').select('*').eq('depot_id', depotId).order('created_at')
+  if (error) throw error
+  return data || []
+}
+export async function ajouterAmortissement(depotId, { libelle, montantJour, dateDebut }) {
+  const { data, error } = await supabase.from('amortissements').insert({
+    depot_id: depotId, libelle, montant_jour: Number(montantJour) || 0,
+    date_debut: dateDebut || new Date().toISOString().slice(0, 10),
+  }).select()
+  if (error) throw error
+  return data?.[0] || null
+}
+export async function modifierAmortissement(id, { actif }) {
+  const { error } = await supabase.from('amortissements').update({ actif: !!actif }).eq('id', id)
+  if (error) throw error
+}
+export async function supprimerAmortissement(id) {
+  const { error } = await supabase.from('amortissements').delete().eq('id', id)
   if (error) throw error
 }
 

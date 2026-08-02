@@ -21,9 +21,16 @@ function enCasiers(bouteilles, bpc) {
   return { cs, reste }
 }
 
+// Date du jour au format 'AAAA-MM-JJ' (locale, pas UTC)
+function aujourdhui() {
+  const t = new Date()
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+}
+
 export default function StockPatron({ depotId }) {
   const [lignes, setLignes] = useState(null)
   const [corrige, setCorrige] = useState(null) // ligne en cours de correction (modale)
+  const [mode, setMode] = useState('actuel') // 'actuel' | 'intervalle'
 
   const charger = useCallback(async () => {
     const [stocks, boissons] = await Promise.all([
@@ -63,6 +70,29 @@ export default function StockPatron({ depotId }) {
 
   return (
     <div className="h-full overflow-y-auto no-scrollbar bg-slate-100 p-3 pb-20">
+      {/* Bascule Stock actuel / Intervalle de dates */}
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <button
+          onClick={() => setMode('actuel')}
+          className={`rounded-xl py-3 font-bold text-sm ${
+            mode === 'actuel' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600'
+          }`}
+        >
+          📦 Stock actuel
+        </button>
+        <button
+          onClick={() => setMode('intervalle')}
+          className={`rounded-xl py-3 font-bold text-sm ${
+            mode === 'intervalle' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600'
+          }`}
+        >
+          📅 Intervalle
+        </button>
+      </div>
+
+      {mode === 'intervalle' && <StockIntervalle depotId={depotId} />}
+      {mode === 'actuel' && (
+      <>
       {/* Synthèse */}
       <div className="grid grid-cols-2 gap-2 mb-3">
         <div className="bg-emerald-500 text-white rounded-xl p-3">
@@ -112,6 +142,85 @@ export default function StockPatron({ depotId }) {
           onFerme={() => setCorrige(null)}
           onSauve={() => { setCorrige(null); charger() }}
         />
+      )}
+      </>
+      )}
+    </div>
+  )
+}
+
+// ----- Mouvements de stock sur un intervalle de dates (Du … au …) -----------
+function StockIntervalle({ depotId }) {
+  const [du, setDu] = useState(aujourdhui())
+  const [au, setAu] = useState(aujourdhui())
+  const [detail, setDetail] = useState(null)
+  const [erreur, setErreur] = useState(null)
+
+  useEffect(() => {
+    let annule = false
+    setErreur(null)
+    Cloud.mouvementsStockIntervalle(depotId, du, au)
+      .then((r) => { if (!annule) setDetail(r.detail || []) })
+      .catch((e) => { if (!annule) setErreur(e.message || 'Erreur de chargement') })
+    return () => { annule = true }
+  }, [depotId, du, au])
+
+  return (
+    <div>
+      <div className="bg-white rounded-xl p-3 mb-3 shadow-sm flex items-end gap-2">
+        <label className="flex-1 text-xs font-semibold text-slate-600">
+          Du
+          <input type="date" value={du} max={au}
+            onChange={(e) => setDu(e.target.value)}
+            className="mt-1 border rounded-lg p-2 w-full text-sm font-normal text-slate-800" />
+        </label>
+        <label className="flex-1 text-xs font-semibold text-slate-600">
+          Au
+          <input type="date" value={au} min={du} max={aujourdhui()}
+            onChange={(e) => setAu(e.target.value)}
+            className="mt-1 border rounded-lg p-2 w-full text-sm font-normal text-slate-800" />
+        </label>
+      </div>
+
+      {erreur && <p className="text-red-600 text-sm font-semibold mb-2 px-1">{erreur}</p>}
+      {!detail && !erreur && <p className="text-slate-400 text-center py-6">Chargement…</p>}
+
+      {detail && (
+        <div className="bg-white rounded-xl p-2 shadow-sm overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead>
+              <tr className="text-left text-slate-500 border-b">
+                <th className="py-1 px-1">Boisson</th>
+                <th className="text-right px-1">Reçu</th>
+                <th className="text-right px-1">Vendu</th>
+                <th className="text-right px-1">Cassé</th>
+                <th className="text-right px-1">Ajust.</th>
+                <th className="text-right px-1">Variation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.map((d) => (
+                <tr key={d.boisson_id} className="border-b last:border-0">
+                  <td className="py-1.5 px-1">{d.emoji} {d.nom}</td>
+                  <td className="text-right px-1 text-emerald-600 font-semibold">
+                    {d.entrees ? `+${d.entrees}` : 0}
+                  </td>
+                  <td className="text-right px-1 text-slate-700 font-semibold">{d.sorties || 0}</td>
+                  <td className="text-right px-1 text-red-600 font-semibold">{d.casses || 0}</td>
+                  <td className="text-right px-1 font-semibold">
+                    {d.ajustements > 0 ? `+${d.ajustements}` : d.ajustements || 0}
+                  </td>
+                  <td className={`text-right px-1 font-bold ${d.variation_nette < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                    {d.variation_nette > 0 ? `+${d.variation_nette}` : d.variation_nette}
+                  </td>
+                </tr>
+              ))}
+              {detail.length === 0 && (
+                <tr><td colSpan={6} className="text-slate-400 text-center py-6">Aucun mouvement sur cette période.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   )
