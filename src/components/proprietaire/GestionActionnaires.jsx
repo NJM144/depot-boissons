@@ -16,6 +16,10 @@ function moisCourant() {
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`
 }
 
+function formaterDateHeure(iso) {
+  return new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
 export default function GestionActionnaires({ depotId }) {
   const [mois, setMois] = useState(moisCourant())
   const [data, setData] = useState(null)
@@ -36,6 +40,21 @@ export default function GestionActionnaires({ depotId }) {
   const enregistrerFond = async () => {
     await Cloud.setFondCommerce(depotId, fond)
     charger()
+  }
+
+  const basculerVersement = async (a) => {
+    try {
+      if (a.verse) {
+        if (!confirm(`Annuler le versement marqué pour ${a.nom} ?`)) return
+        await Cloud.annulerVersementActionnaire(a.id, mois + '-01')
+      } else {
+        await Cloud.marquerVersementActionnaire(depotId, a.id, mois + '-01', a.benefice_net)
+      }
+      charger()
+    } catch (e) {
+      console.error('basculerVersement', e)
+      alert(e.message || 'Erreur')
+    }
   }
 
   if (!data) return <div className="p-6 text-center text-slate-500">Chargement…</div>
@@ -130,6 +149,24 @@ export default function GestionActionnaires({ depotId }) {
                 {(a.produits_reserves || []).length > 0 && <span className="text-amber-600"> ({a.produits_reserves.join(', ')})</span>}
               </p>
             )}
+            {/* Versement du bénéfice à l'actionnaire (marqueur payé/pas payé) */}
+            <div className="mt-2">
+              {a.verse ? (
+                <div className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1.5">
+                  <span className="text-xs text-emerald-700 font-semibold">
+                    ✅ Versé le {formaterDateHeure(a.date_versement)} · {formaterFCFA(a.montant_verse)}
+                  </span>
+                  <button onClick={() => basculerVersement(a)} className="text-xs text-red-600 font-semibold underline shrink-0">
+                    Annuler
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => basculerVersement(a)}
+                  className="w-full bg-emerald-600 active:bg-emerald-700 text-white rounded-lg py-2 text-sm font-bold">
+                  💰 Marquer versé ({formaterFCFA(a.benefice_net)})
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>

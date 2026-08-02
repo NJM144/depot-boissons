@@ -645,6 +645,23 @@ export async function supprimerAmortissement(id) {
   if (error) throw error
 }
 
+// Versement du bénéfice à l'actionnaire — marqueur "payé / pas payé" par mois
+// ('AAAA-MM-01'), avec traçabilité (montant remis, date). Le calcul du
+// bénéfice lui-même vient toujours de get_benefices_actionnaires.
+export async function marquerVersementActionnaire(depotId, actionnaireId, mois, montant) {
+  const { error } = await supabase.from('versements_actionnaire')
+    .upsert(
+      { depot_id: depotId, actionnaire_id: actionnaireId, mois, montant: Number(montant) || 0, date_versement: new Date().toISOString() },
+      { onConflict: 'actionnaire_id,mois' },
+    )
+  if (error) throw error
+}
+export async function annulerVersementActionnaire(actionnaireId, mois) {
+  const { error } = await supabase.from('versements_actionnaire')
+    .delete().eq('actionnaire_id', actionnaireId).eq('mois', mois)
+  if (error) throw error
+}
+
 // Le compte d'un actionnaire pour un mois (authentifié par son CODE).
 //  mois : 'AAAA-MM-01'. Renvoie l'objet calculé (ou { trouve:false }).
 export async function getCompteActionnaire(code, mois) {
